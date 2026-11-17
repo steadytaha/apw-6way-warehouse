@@ -6,6 +6,7 @@ import { h, icon, fmtNum, fmtPct, eur, toast, announce, reducedMotion, dockCaseL
 import { state } from './store.js';
 import { model } from './model.js';
 import { hbars } from './story/charts.js';
+import { ioStrip, areaBar, dockPlan, tierGauge } from './lead.js';
 
 const num = (x, d = 0) => fmtNum(x, d);
 const dim = (x) => fmtNum(x, 1).replace(/\.0$/, '');
@@ -47,7 +48,8 @@ function table(cols, rows, { caption, rowClass } = {}) {
 }
 const kvs = (rows) => h('dl.kvs', rows.filter(Boolean).map(([l, v, note]) => h('div.kv', h('dt', l, note && assumeBadge(note)), h('dd.num', v))));
 const note = (t) => h('p.cap.an-note', t);
-const reason = (label, text) => (text ? h('p.an-why', h('strong', label + ' '), text) : null);
+// R26d V8: long "Why" paragraphs fold under their label (old: open prose under every card)
+const reason = (label, text) => (text ? h('details.an-why-d', h('summary', label.replace(/:$/, '')), h('p.an-why', text)) : null);
 // FIX (R17b): a missed target is shown in the calm warning tone. Old cause: chip.bad (alarm red) for every "no".
 const okChip = (ok, yes, no) => h('span.chip.' + (ok ? 'ok' : 'warn'), icon(ok ? 'check' : 'info', 'sm'), ok ? yes : no);
 const busy = (text) => h('div.an-busy', { role: 'status' }, h('span.dot'), text);
@@ -516,6 +518,7 @@ function pWhatIf(c) {
 }
 
 // ---------------------------------------------------------------- the tab strip
+const LEADS = { fleet: (rep) => ioStrip(rep.io_path), areas: (rep) => areaBar(rep.areas), flow: (rep) => dockPlan(rep), racks: (rep) => tierGauge(rep) };
 const TABS = [
   { id: 'fleet', label: 'Fleet and lifts', render: pFleet }, { id: 'areas', label: 'Areas', render: pAreas }, { id: 'flow', label: 'Capacity and flow', render: pFlow },
   { id: 'racks', label: 'Tiers and racks', render: pRacks }, { id: 'cost', label: 'Cost and energy', render: pCost }, { id: 'staff', label: 'Staff and rules', render: pStaff }, { id: 'shapes', label: 'Shapes', render: pShapes }, { id: 'team', label: 'Team cases 1–4', render: pTeam },
@@ -535,6 +538,8 @@ export function mountAnalysis(ctx) {
     panel.setAttribute('aria-labelledby', 'an-tab-' + cur); panel.id = 'an-panel';
     let body;
     try { body = t.render(c); } catch (e) { console.error(e); body = fail(e); }
+    // R26d V8: the first four tabs open with one drawing (the lead), the tables and prose follow
+    try { const lead = LEADS[t.id] && LEADS[t.id](c.rep); if (lead) body = h('div.an-leadwrap', lead, body); } catch (e) { console.warn('[analysis] lead picture failed', e); }
     panel.replaceChildren(body);
     if (animate && !reducedMotion()) panel.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: 'cubic-bezier(0.2,0,0,1)' });
   }

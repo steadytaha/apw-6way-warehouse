@@ -5,6 +5,7 @@ import { state } from './store.js';
 import { model, ModelError } from './model.js';
 import { go } from './nav.js';
 import { problemCard } from './diagnosis.js';
+import { createPlanPreview } from './preview.js';
 
 const MIN_MS = 520, CAP_MS = 9000;
 
@@ -47,6 +48,8 @@ export function mountRun() {
   const reported = new Set();
   const runStart = performance.now();
 
+  // R26d V10: the plan on the right fills in module by module (building and docks at once; racks after Geometry, lift heads after Layout, shuttles after Fleet); schematic, not the result
+  const pv = createPlanPreview({ mode: job.mode, layers: ['building', 'docks'], schematic: job.mode !== 'fixed', forceLifts: true });
   // ---- DOM
   const pct = h('span.num.run-pct', '0');
   const bar = h('div.run-total', h('i'));
@@ -68,7 +71,7 @@ export function mountRun() {
     h('header.run-head', h('p.eyebrow', icon(job.mode === 'fixed' ? 'building' : 'target', 'sm'), job.mode === 'fixed' ? 'Fixed warehouse' : 'Optimal warehouse'),
       h('h1', { tabindex: '-1' }, title),
       h('div.run-pctline', h('span.run-pctwrap', pct, h('span.pc', '%')), bar), status),
-    loadWrap, list, errBox, h('div.run-actions', cancel));
+    h('div.run-grid', h('div.run-main', loadWrap, list), h('aside.run-aside', h('div.card.pv-card', h('p.eyebrow', 'The plan fills in'), pv.el))), errBox, h('div.run-actions', cancel));
   const items = [...list.children];
 
   // ---- model load display (the model may still be loading when the user arrives here)
@@ -87,6 +90,7 @@ export function mountRun() {
   }
   function activate(i) {
     active = i; activeSince = null;
+    pv.setLayers(['building', 'docks'].concat(i >= 2 ? ['racks'] : [], i >= 5 ? ['lifts'] : [], i >= 6 ? ['fleet'] : []));
     if (i >= total) return;
     const li = items[i];
     li.className = 'act';

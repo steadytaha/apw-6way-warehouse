@@ -68,6 +68,7 @@ export function buildComposite(rep, { scene, textures, small }) {
     root, sc: { ...sc, columns: secs[0].s.sc.columns, building: B }, f: f0, blocks: prim.blocks, modules: prim.modules, tz: prim.tz, tiers: prim.tiers, LEV: prim.LEV, ZR: prim.ZR,
     shell, sections: secs, info,
     setABC(on) { secs.forEach((c) => c.w.setABC(on)); }, abc: false,
+    setDim(k) { secs.forEach((c) => c.w.setDim(k)); }, dim: 1, setLOD(lv) { secs.forEach((c) => c.w.setLOD(lv)); }, get lod() { return secs[0].w.lod; }, floorMats: [...(isShape && fp ? [fp.floorMat] : secs.map((c) => c.w.floorMat))].filter(Boolean), apronMats: [...(isShape && fp ? [fp.apronMat] : secs.map((c) => c.w.apronMat))].filter(Boolean),   // R26d V7
     lifts: secs.flatMap((c) => c.w.lifts), docks: docksW, convZ: prim.convZ,
     aoTextures: secs.flatMap((c) => c.w.aoTextures), mats: [...mats, ...secs.flatMap((c) => c.w.mats)],
     get positions() { return secs.reduce((a, c) => a + c.w.positions, 0); }, get stock() { return secs.reduce((a, c) => a + c.w.stock, 0); },

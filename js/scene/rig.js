@@ -145,7 +145,7 @@ export function createRig(camera, dom, world, { reduced = false, onChange = () =
   function tourPose(s, e) {
     const from = s.from || s.to, to = s.to || s.from;
     const a = { pos: toThree(from.pos), tgt: toThree(from.target), fov: from.fov || 38 }, b = { pos: toThree(to.pos), tgt: toThree(to.target), fov: to.fov || a.fov };
-    if (rig.reduced) return b;
+    if (rig.reduced) { if (s.follow) { const p = s.follow(); b.tgt.copy(p); b.pos.copy(p).add(new THREE.Vector3(0.6, 0.45, 0.9).normalize().multiplyScalar(s.followDist || 14)); } return b; }   // R26d: a follow shot keeps its subject in frame with reduced motion too
     const out = { pos: a.pos.clone().lerp(b.pos, e), tgt: a.tgt.clone().lerp(b.tgt, e), fov: a.fov + (b.fov - a.fov) * e };
     if (s.orbit) {
       const ang = THREE.MathUtils.degToRad(s.orbit) * e, off = out.pos.clone().sub(out.tgt);

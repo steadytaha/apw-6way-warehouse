@@ -457,3 +457,73 @@ html.sc-lock { overflow: hidden; }
 .sc-preset { padding: 0 0.55rem; justify-content: center; }
 .sc-preset span { display: none; }
 @container stage (min-width: 52rem) { .sc-preset span { display: inline; } .sc-preset { justify-content: flex-start; padding: 0 var(--sp-3) 0 var(--sp-2); } }
+
+/* R26d V7: camera preset thumbnails (rendered once from the scene, shown only in wide stages; the icon and word stay for narrow stages and for screen readers) */
+.sc-thumb { display: none; }
+@container stage (min-width: 60rem) {      /* wide stages only (expanded view): in the normal stage the strip would cover the building in the plan and section views (qa_results) */
+  .sc-preset.has-thumb { padding: 3px var(--sp-3) 3px 3px; min-height: 0; }
+  .sc-preset.has-thumb > svg { display: none; }
+  .sc-preset.has-thumb .sc-thumb { display: block; width: 4.5rem; height: 2.5rem; border-radius: var(--r-sm); background-size: cover; background-position: center; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent); flex: none; }
+  .sc-preset[aria-pressed="true"].has-thumb .sc-thumb { box-shadow: 0 0 0 2px var(--on-accent); }
+}
+
+/* R26d V10 / V11: welcome hero, choose pictures, plan preview (wizard aside and run screen) */
+@media (min-width: 62rem) {
+  .welcome { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); align-items: center; column-gap: var(--sp-8); }
+  .welcome .w-text { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-5); }
+}
+.welcome .w-text { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-5); }
+.w-hero { margin: 0; display: grid; gap: var(--sp-3); }
+.w-hero img { display: block; width: 100%; height: auto; border-radius: var(--r-lg); border: 1px solid var(--line); box-shadow: var(--shadow-2); }
+.w-hero figcaption { display: grid; gap: var(--sp-2); }
+.w-hero-cap { color: var(--text-2); font-size: var(--fs-footnote); }
+.w-stats { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-5); }
+.w-stats li { display: grid; }
+.w-stats b { font: var(--fw-semibold) var(--fs-title2)/1.1 var(--font-display); }
+.w-stats span { color: var(--text-2); font-size: var(--fs-footnote); }
+.choice-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.choice-pic { width: 7.5rem; height: auto; flex: none; }
+.cp-bld { fill: var(--surface-2); stroke: var(--text-3); stroke-width: 1.2; }
+.cp-bld.dashed { stroke-dasharray: 3 2.5; }
+.cp-rack { fill: var(--role-structure); opacity: 0.55; }
+.cp-dock.in { fill: var(--role-in); } .cp-dock.out { fill: var(--role-out); }
+.cp-target { fill: none; stroke: var(--accent); stroke-width: 1.6; } .cp-target.f { fill: var(--accent); }
+.choice .choice-gets { font-size: var(--fs-footnote); color: var(--text-2); }
+.choice .choice-gets b { color: var(--text); font-weight: var(--fw-medium); }
+.pv-card { padding: var(--sp-3); display: grid; gap: var(--sp-2); }
+.pv-card .eyebrow { margin: 0; }
+.pv { margin: 0; display: grid; gap: var(--sp-2); }
+.pv-svg { width: 100%; height: auto; display: block; }
+.pv-bld { fill: var(--surface-2); stroke: var(--text-3); stroke-width: 1.5; stroke-linejoin: round; }
+.pv-bld.dashed { stroke-dasharray: 5 4; }
+.pv-rack-cell { fill: var(--role-structure); opacity: 0.6; }
+.pv-dim { fill: var(--text-2); font: var(--fw-medium) 11px var(--font-sans); }
+.pv-dock rect { stroke: none; } .pv-dock.in rect { fill: var(--role-in); } .pv-dock.out rect { fill: var(--role-out); }
+.pv-dock text { fill: #fff; font: var(--fw-semibold) 11px var(--font-sans); }
+.pv-lift { fill: var(--role-lift); } .pv-shuttle { fill: var(--role-shuttle); stroke: var(--surface); stroke-width: 1; }
+.pv-cap { margin: 0; font-size: var(--fs-micro); }
+.run-grid { display: grid; gap: var(--sp-5); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 62rem) { .run { max-width: 66rem; } .run-grid { grid-template-columns: minmax(0, 40rem) minmax(0, 1fr); align-items: start; } .run-aside { position: sticky; top: 5rem; } }
+
+/* R26d V8: lead pictures of the analysis tabs */
+.an-leadwrap { display: grid; gap: var(--sp-5); }
+.lead { margin: 0; padding: var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); display: grid; gap: var(--sp-3); }
+.lead-cap { color: var(--text-2); font-size: var(--fs-footnote); }
+.ls-row { display: grid; gap: var(--sp-1); }
+.ls-title { margin: 0; font-size: var(--fs-body); }
+.ls-strip { list-style: none; margin: 0; padding: 0; display: flex; gap: 2px; min-height: 2.25rem; border-radius: var(--r-sm); overflow: hidden; }
+.ls-seg { display: grid; place-items: center; min-width: 1.4rem; color: #fff; font: var(--fw-semibold) var(--fs-micro)/1 var(--font-sans); }
+[data-theme="dark"] .ls-seg { color: #101216; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ls-seg { color: #101216; } }
+.ls-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--fs-footnote); color: var(--text-2); }
+.ls-legend li { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.ls-legend i { width: 0.75rem; height: 0.75rem; border-radius: 3px; display: inline-block; }
+.la-bar { list-style: none; margin: 0; padding: 0; display: flex; gap: 2px; height: 2.5rem; border-radius: var(--r-sm); overflow: hidden; }
+.la-seg { background: color-mix(in srgb, var(--accent) var(--k), var(--surface-2)); min-width: 3px; }
+.lead-plan-box { max-width: 34rem; } .lead-plan-box svg { width: 100%; height: auto; display: block; }
+.lead-gauge-svg { width: 100%; max-width: 22rem; height: auto; }
+.lg-tier { fill: var(--role-out); opacity: 0.85; } .lg-ghost { fill: none; stroke: var(--text-3); stroke-dasharray: 4 3; } .lg-ghost.bad { stroke: var(--role-bind); }
+.lg-roof, .lg-floor { stroke: var(--text-2); stroke-width: 1.5; } .lg-soft { stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 2 2; }
+.lg-t { fill: var(--text); font: var(--fw-medium) 13px var(--font-sans); } .lg-t.end { text-anchor: end; } .lg-t.bad { fill: var(--role-bind); } .lg-t.soft { fill: var(--text-2); }
+.an-why-d { border-top: 1px solid var(--line); padding-top: var(--sp-2); }
+.an-why-d summary { cursor: pointer; color: var(--text-2); font-size: var(--fs-footnote); }

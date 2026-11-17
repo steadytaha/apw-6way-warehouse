@@ -202,7 +202,10 @@ export function buildWorld(rep, opt) {
   const postGeo = merge([cbox(f, 0.02, 0.09, 1, 0.025, 0, 0), cbox(f, 0.07, 0.02, 1, 0, 0.035, 0), cbox(f, 0.07, 0.02, 1, 0, -0.035, 0)]);
   const mUp = own(matFrom('rackUpright')), mBrace = own(matFrom('rackBrace')), mBeam = own(matFrom('rackBeam')), mProt = own(matFrom('rackProtector')), mRail = own(matFrom('rail'));
   const steel = new THREE.Group(); steel.name = 'steel';
-  steel.add(post.mesh(mUp, { cast: true, geo: postGeo }), braces.mesh(mBrace), beams.mesh(mBeam, { cast: true, receive: true }), rails.mesh(mRail), guards.mesh(mProt));
+  world.dimMats = [mUp, mBrace, mBeam, mProt].map((m) => ({ m, c: m.color.clone() }));   // R26d V7: the rack steel that dims when an actor is in focus (setDim)
+  const meshPost = post.mesh(mUp, { cast: true, geo: postGeo }), meshBrace = braces.mesh(mBrace), meshBeam = beams.mesh(mBeam, { cast: true, receive: true }), meshRail = rails.mesh(mRail), meshGuard = guards.mesh(mProt);
+  steel.add(meshPost, meshBrace, meshBeam, meshRail, meshGuard);
+  world.lodMeshes = { braces: meshBrace, rails: meshRail, guards: meshGuard };
   root.add(steel);
   world.counts = { posts: post.n, braces: braces.n, beams: beams.n, rails: rails.n };
 
@@ -338,6 +341,21 @@ export function buildWorld(rep, opt) {
   paintAll();
   world.paintLane = (lane) => { for (let j = 0; j < lane.depth; j++) paintSlot(lane, j); const ch = lane.chunk; for (const m of [ch.base, ch.load]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; } };
   world.setABC = (on) => { world.abc = !!on; paintAll(); };
+  // R26d V7 (LOD): level 0 = full detail; 1 (camera far) drops the X-lacing and the column guards; 2 (very far) also the galvanised rails and the wooden pallet bases (the load boxes stay).
+  // Old cause: the whole steel was drawn at any distance (1.02 M triangles on 120 x 90, where a brace is far below a pixel). Beams, posts and the load boxes keep the rack's look.
+  world.lod = 0;
+  world.setLOD = (lv) => {
+    if (lv === world.lod) return; world.lod = lv;
+    const m = world.lodMeshes; m.braces.visible = lv < 1; m.guards.visible = lv < 1; m.rails.visible = lv < 2;
+    for (const ch of chunks) if (ch.base) ch.base.visible = lv < 2;
+  };
+  // R26d V7 (team decision: realistic racks stay, actors stand out by other means): dimming the rack steel and the load while an actor is in focus. dim = 1 normal, 0.4 dimmed; studioBoost comes from env.js (pallets 1.2x in Studio dark).
+  world.dim = 1; world.studioBoost = 1;
+  world.applyDim = () => {
+    for (const d of world.dimMats || []) d.m.color.copy(d.c).multiplyScalar(world.dim);
+    palletMat.color.setScalar(world.dim * world.studioBoost); cartonMat.color.setScalar(world.dim * world.studioBoost);
+  };
+  world.setDim = (k) => { world.dim = k; world.applyDim(); };
 
   // ---------------------------------------------------------------- luminaires (emissive strips, no real light each)
   const lum = new Packer(f);
@@ -354,7 +372,7 @@ export function buildWorld(rep, opt) {
   const convFrame = own(matFrom('conveyorFrame'));
   const convHeight = 0.6;
   world.convZ = convHeight;
-  const done = new Set();
+  const done = new Set(), convTops = [], convFrames = [];     // R26d V7: all conveyor tops / frames are baked into one mesh each (old: two meshes per segment)
   conv.forEach((c) => {
     for (let i = 0; i + 1 < c.path.length; i++) {
       const [a0, b0] = c.path[i], [a1, b1] = c.path[i + 1];
@@ -362,13 +380,13 @@ export function buildWorld(rep, opt) {
       if (done.has(key) || (Math.abs(a1 - a0) + Math.abs(b1 - b0)) < 0.05) continue; done.add(key);
       const len = Math.hypot(a1 - a0, b1 - b0), along = Math.abs(a1 - a0) > Math.abs(b1 - b0);
       const su = along ? len + 1.0 : 1.0, sv = along ? 1.0 : len + 1.0;
-      const top = new THREE.Mesh(scaleUV(cbox(f, su, sv, 0.05, 0, 0, 0), along ? su / 0.16 : 1, along ? 1 : sv / 0.16), convMat);
-      top.position.copy(f.pos((a0 + a1) / 2, (b0 + b1) / 2, convHeight - 0.08)); top.receiveShadow = true; root.add(top);
+      const cp = f.pos((a0 + a1) / 2, (b0 + b1) / 2, convHeight - 0.08);
+      convTops.push(scaleUV(cbox(f, su, sv, 0.05, 0, 0, 0), along ? su / 0.16 : 1, along ? 1 : sv / 0.16).translate(cp.x, cp.y, cp.z));
       const side = (k) => (along ? cbox(f, su, 0.06, 0.2, 0, k * 0.5, -0.04) : cbox(f, 0.06, sv, 0.2, k * 0.5, 0, -0.04));
-      const frm = new THREE.Mesh(merge([side(-1), side(1)]), convFrame);
-      frm.position.copy(f.pos((a0 + a1) / 2, (b0 + b1) / 2, convHeight - 0.08)); root.add(frm);
+      convFrames.push(merge([side(-1), side(1)]).translate(cp.x, cp.y, cp.z));
     }
   });
+  if (convTops.length) { const tm = new THREE.Mesh(merge(convTops), convMat); tm.receiveShadow = true; root.add(tm); root.add(new THREE.Mesh(merge(convFrames), convFrame)); }
 
   // ---------------------------------------------------------------- shell with cut-away
   if (!rackOnly) buildShell(world, own, T, docks);
@@ -385,6 +403,7 @@ function buildShell(world, own, T, docks) {
   const shelterMat = own(matFrom('dockBumper', { roughness: 0.9 }));
   const dark = own(matFrom('safetyBlack'));
   const shell = { walls: {}, cut: 'closed', tweens: new Map(), mats: [] };
+  const plinths = [];
   const H = B.H;
   const doorW = 3.0, doorH = 3.2;
   const wallDef = {
@@ -409,8 +428,8 @@ function buildShell(world, own, T, docks) {
     };
     const plinthSeg = (a, b) => {
       if (b - a < 0.01) return;
-      const pl = new THREE.Mesh(new THREE.BoxGeometry(b - a, 1.0, 0.22), plinthMat);
-      const [qx, qy] = d.pos((a + b) / 2); pl.position.set(qx, 0.5, -qy); pl.rotation.y = d.rot; pl.receiveShadow = true; root.add(pl);
+      const [qx, qy] = d.pos((a + b) / 2);
+      plinths.push(new THREE.BoxGeometry(b - a, 1.0, 0.22).rotateY(d.rot).translate(qx, 0.5, -qy));      // R26d V7: baked into one mesh (old: one per wall segment)
     };
     for (const [a, b] of cuts) { seg(a, b, 1.0, H); plinthSeg(a, b); }
     for (const c of openings) seg(c - doorW / 2, c + doorW / 2, doorH, H);   // lintel above each door opening
@@ -432,6 +451,7 @@ function buildShell(world, own, T, docks) {
     }
     shell.walls[w] = { group: g, mat }; root.add(g);
   }
+  if (plinths.length) { const pm0 = new THREE.Mesh(merge(plinths), plinthMat); pm0.receiveShadow = true; root.add(pm0); }
   // roof with parapet and rooflights
   const rm = roofBase; own(rm); shell.mats.push(rm);
   const roof = new THREE.Group(); roof.name = 'roof';

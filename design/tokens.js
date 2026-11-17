@@ -69,7 +69,7 @@ export const MATERIALS = {
 };
 
 // ---------- scene environments ----------
-// Light theme -> 'day'; dark theme -> 'dusk' (can be overridden per camera shot).
+// Light theme -> 'day'; dark theme -> 'studio' (can be overridden per camera shot).
 export const ENVIRONMENTS = {
   day: {
     background: 0xdfe6ec, fog: { color: 0xdfe6ec, density: 0.0035 },
@@ -77,11 +77,13 @@ export const ENVIRONMENTS = {
     sun: { color: 0xfff1dc, intensity: 2.4, position: [-60, 90, 50], shadow: true },
     exposure: 1.0, toneMapping: 'ACESFilmic', interior: { strips: 0.55, ambient: 0.35 },
   },
-  dusk: {
-    background: 0x141c26, fog: { color: 0x141c26, density: 0.0055 },
-    hemi: { sky: 0x3b4d66, ground: 0x1a1b1f, intensity: 0.5 },
-    sun: { color: 0xffc08a, intensity: 0.7, position: [-80, 22, 60], shadow: true },
-    exposure: 1.05, toneMapping: 'ACESFilmic', interior: { strips: 1.0, ambient: 0.2 },
+  // R26d V7 (team decision 2026-11-17): "Studio dark" replaces "Dusk" as the dark-theme environment (old cause: the blue-grey dusk sky made the scene grey-blue in the dark UI, audit E6).
+  // Neutral background and floor, a soft white key light, pallets 1.2x brighter (env.js STUDIO_BOOST), steel gets its edge from the light, not from the colour of the room.
+  studio: {
+    background: 0x1b1e23, fog: { color: 0x1b1e23, density: 0.0035 },
+    hemi: { sky: 0xaeb6c0, ground: 0x2a2d31, intensity: 0.85 },
+    sun: { color: 0xffffff, intensity: 1.9, position: [-70, 95, 55], shadow: true },
+    exposure: 1.1, toneMapping: 'ACESFilmic', interior: { strips: 0.9, ambient: 0.4 },
   },
   lightsOut: {   // interior-only hero: strips dimmed to standby except near moving vehicles
     background: 0x0b0d10, fog: { color: 0x0b0d10, density: 0.012 },

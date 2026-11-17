@@ -80,5 +80,5 @@ export function buildFootprintShell(rects, doors, B, T, own) {
     }
   };
   shell.set('closed', 'S', false);
-  return { root, shell, doorObjs, rooflightMat: lightMat };
+  return { root, shell, doorObjs, rooflightMat: lightMat, floorMat, apronMat };
 }

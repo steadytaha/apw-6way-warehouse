@@ -37,7 +37,7 @@ export function createPanel(stage, api, init) {
   const play = h('button.btn.sc-play', { type: 'button', 'aria-label': 'Pause animation', 'aria-pressed': 'true', onclick: () => api.togglePlay() }, icon('play', 'sm'), h('span', 'Pause'));
   // R24 V6: camera presets (left toolbar, icon + word) replace the 3D / Plan / Section segment; thumbnails are V7 / later
   const PRESETS = [['orbit', 'Overview', 'building'], ['plan', 'Plan', 'grid'], ['section', 'Section', 'layers'], ['lift', 'Lift', 'gauge'], ['docks', 'Docks', 'target'], ['tiers', 'Tiers', 'layers']];
-  const pbtn = PRESETS.map(([id, text, ic]) => h('button.sc-preset', { type: 'button', 'data-id': id, 'aria-pressed': String(id === init.view), title: text + ' view', 'aria-label': text + ' view', onclick: () => api.preset(id) }, icon(ic, 'sm'), h('span', text)));
+  const pbtn = PRESETS.map(([id, text, ic]) => h('button.sc-preset', { type: 'button', 'data-id': id, 'aria-pressed': String(id === init.view), title: text + ' view', 'aria-label': text + ' view', onclick: () => api.preset(id) }, icon(ic, 'sm'), h('i.sc-thumb', { 'aria-hidden': 'true' }), h('span', text)));      // R26d V7: .sc-thumb gets the rendered preview (setThumbs)
   const presets = h('div.sc-presets.sc-glass', { role: 'toolbar', 'aria-label': 'Camera presets' }, pbtn);
   const view = { set(v) { pbtn.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === v))); } };
   // legend: one source (ROLES), collapsible, five rows
@@ -45,7 +45,7 @@ export function createPanel(stage, api, init) {
   const legend = h('details.sc-legend.sc-glass', { open: !matchMedia('(max-width: 40rem)').matches }, h('summary', 'Legend'),
     h('ul', LEG.map(([r, ic]) => h('li', h('i', { style: `background:var(${ROLES[r].css})` }), icon(ic, 'sm'), h('span', r === 'structure' ? 'Rack' : ROLES[r].label)))));
   const shell = seg('Building shell', [['closed', 'Closed'], ['cut', 'Cut-away'], ['open', 'Open']], (v) => api.setShell(v), init.shell);
-  const light = seg('Lighting', [['day', 'Day'], ['dusk', 'Dusk'], ['lightsOut', 'Lights out']], (v) => api.setEnv(v), init.env);
+  const light = seg('Lighting', [['day', 'Day'], ['studio', 'Studio dark'], ['lightsOut', 'Lights out']], (v) => api.setEnv(v), init.env);
   const spd = seg('Animation speed', speeds.map((s) => [s, s + '×', `${s} times real time`]), (v) => api.setSpeed(Number(v)), init.speed);
   const abc = h('button.chip.sc-abc', { type: 'button', 'aria-pressed': 'false', title: 'Colour loads by ABC class (20 / 30 / 50 % of the columns nearest the lifts, assumption)', onclick: () => api.toggleABC() }, 'ABC colours');
   const tiers = h('button.chip.sc-tiers-btn', { type: 'button', 'aria-pressed': 'false', title: 'Tier limit: rack height vs building height, binding limit, next tier', onclick: () => api.toggleTiers() }, 'Tier limit');
@@ -62,6 +62,8 @@ export function createPanel(stage, api, init) {
   let hintT = setTimeout(() => hint.classList.add('off'), 6000);
   return {
     el: { hud, dock, fade, text, follow, presets, legend },
+    /** R26d V7: preview pictures of the camera presets ({id: dataURL}), shown in wide stages */
+    setThumbs(map) { pbtn.forEach((b) => { const u = map[b.dataset.id]; const t = b.querySelector('.sc-thumb'); if (u && t) { t.style.backgroundImage = `url(${u})`; b.classList.add('has-thumb'); } }); },
     setView: view.set, setShell: shell.set, setEnv: light.set, setSpeed(v) { spd.set(v); el.speed.textContent = v + '×'; },
     setPlaying(on) { play.setAttribute('aria-pressed', String(on)); play.setAttribute('aria-label', on ? 'Pause animation' : 'Play animation'); play.lastChild.textContent = on ? 'Pause' : 'Play'; },
     setABC(on) { abc.setAttribute('aria-pressed', String(on)); },

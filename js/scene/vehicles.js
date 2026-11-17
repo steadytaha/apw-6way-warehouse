@@ -3,7 +3,7 @@ import { THREE, makeFrame, matFrom, tok, cbox, wbox, merge, cyl, scaleUV, clamp 
 import { ROLES } from '../../design/tokens.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3(), _a = new THREE.Vector3();
-const _one = new THREE.Vector3(1, 1, 1);
+const _one = new THREE.Vector3(1, 1, 1), _sk = new THREE.Vector3(1, 1, 1);
 const Y = new THREE.Vector3(0, 1, 0);
 
 // ===================================================================== shuttle fleet
@@ -18,16 +18,18 @@ export function makeFleet(world, n) {
   const wheelGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.035, 14);
   if (f.swap) wheelGeo.rotateX(Math.PI / 2); else wheelGeo.rotateZ(Math.PI / 2);
   const bar = cbox(f, 0.5, 0.025, 0.03, 0, 0.365, 0.1);
-  const ring = new THREE.CylinderGeometry(0.2, 0.2, 0.008, 28, 1, true).translate(0, 0.182, 0);
+  const ring = new THREE.CylinderGeometry(0.62, 0.62, 0.012, 36, 1, true).translate(0, 0.19, 0);     // R26d V7: busy halo (old: r 0.2, only during the 4 s turn, hardly visible)
   const antenna = cyl(0.008, 0.16, 0.38, 0.24, -0.22, 'y', 6);
 
   const mk = (geo, mat, count, cast = false) => { const m = new THREE.InstancedMesh(geo, mat, count); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.castShadow = cast; m.frustumCulled = false; m.matrixAutoUpdate = false; g.add(m); return m; };
-  const mC = world.own(matFrom('shuttleChassis')), mW = world.own(matFrom('shuttleCover')), mD = world.own(matFrom('shuttleCover', { color: 0xf1f2f2 })), mWh = world.own(matFrom('wheel'));
+  // R26d V7: the shuttle is the brightest thing in the picture (team decision: realistic racks stay): cover in the shuttle role colour with a small emissive lift, deck lighter, so it reads against blue steel, orange beams and kraft pallets.
+  // Old cause: warm-white cover (0xe6e8ea) on pale pallets had almost no contrast; measured by tools/qa_visual.py.
+  const mC = world.own(matFrom('shuttleChassis')), mW = world.own(matFrom('shuttleCover', { color: 0xffb02e, emissive: 0xff8c00, emissiveIntensity: 0.3 })), mD = world.own(matFrom('shuttleCover', { color: 0xffd58a, emissive: 0xff9a00, emissiveIntensity: 0.15 })), mWh = world.own(matFrom('wheel'));
   const iChassis = mk(chassis, mC, n), iCover = mk(cover, mW, n), iDeck = mk(deck, mD, n);
   const iWheel = mk(wheelGeo, mWh, n * 8);
   const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }); world.own(lightMat);
   const iBar = mk(bar, lightMat, n);
-  const ringMat = world.own(new THREE.MeshBasicMaterial({ color: 0x9fb0bf, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+  const ringMat = world.own(new THREE.MeshBasicMaterial({ color: 0xffa83a, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }));
   const iRing = mk(ring, ringMat, n);
   const iAnt = mk(antenna, mC, n);
   iBar.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); iBar.instanceColor.setUsage(THREE.DynamicDrawUsage);
@@ -39,37 +41,73 @@ export function makeFleet(world, n) {
 
   // FIX (R13a): the fleet drew exactly n shuttles (old cause: one fleet per block with a fixed count, so a shuttle could never leave its block); n is now the capacity (the whole pooled
   // fleet), the instance counts follow the shuttles the block holds at the moment, and `order[i]` names the shuttle of instance i (picking).
+  // R26d V7: fading path trail of every moving shuttle (last ~3 s, one line strip = 1 draw call), a focus outline (inverted hull), a focus scale (visual only)
+  const TK = 14, TSTEP = 0.2;
+  const tPos = new Float32Array(n * (TK - 1) * 2 * 3), tCol = new Float32Array(n * (TK - 1) * 2 * 4);
+  const tGeo = new THREE.BufferGeometry(); const tpa = new THREE.BufferAttribute(tPos, 3), tca = new THREE.BufferAttribute(tCol, 4); tpa.setUsage(THREE.DynamicDrawUsage); tca.setUsage(THREE.DynamicDrawUsage);
+  tGeo.setAttribute('position', tpa); tGeo.setAttribute('color', tca); tGeo.setDrawRange(0, 0);
+  const tMat = world.own(new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, toneMapped: false, depthWrite: false }));
+  const trail = new THREE.LineSegments(tGeo, tMat); trail.frustumCulled = false; trail.renderOrder = 8; g.add(trail);
+  const hist = Array.from({ length: n }, () => []); let lastSample = -1e9, trailsOn = true, scaleK = 1, focus = null, lastStates = null, lastTime = 0;
+  const outMat = world.own(new THREE.MeshBasicMaterial({ color: 0xffd23f, side: THREE.BackSide, toneMapped: false }));
+  const outline = new THREE.Group(); outline.visible = false; outline.add(new THREE.Mesh(chassis, outMat), new THREE.Mesh(cover, outMat)); outline.scale.setScalar(1.35); g.add(outline);
+  function sampleTrails(ns, time) {
+    let segs = 0;
+    for (let i = 0; i < ns; i++) {
+      const hs = hist[i], s = lastStates[i]; f.pos(s.u, s.v, s.z + 0.22, _p);
+      const last = hs[hs.length - 1];
+      if (last && last.distanceTo(_p) > 4) hs.length = 0;                          // a jump (transfer, instance re-used by another shuttle): start a new trail
+      hs.push(_p.clone()); if (hs.length > TK) hs.shift();
+      for (let j = 1; j < hs.length; j++) {
+        const a = hs[j - 1], b = hs[j]; if (a.distanceToSquared(b) < 1e-4) continue;   // standing still draws nothing
+        const o = segs * 6, oc = segs * 8, al = j / hs.length;
+        tPos.set([a.x, a.y, a.z, b.x, b.y, b.z], o);
+        tCol.set([1, 0.66, 0.23, al * 0.15, 1, 0.66, 0.23, al * 0.9], oc); segs++;
+      }
+    }
+    tGeo.setDrawRange(0, segs * 2); tpa.needsUpdate = true; tca.needsUpdate = true;
+  }
   const order = [];
   function update(states, time) {
     const ns = Math.min(n, states.length);
+    lastStates = states; lastTime = time;
+    if (trailsOn && time - lastSample >= TSTEP) { lastSample = time; sampleTrails(ns, time); }
     order.length = 0;
+    let fo = false;
     for (let i = 0; i < ns; i++) {
       const s = states[i]; order.push(s);
       f.pos(s.u, s.v, s.z, _p);
-      _m.compose(_p, _q.identity(), _one);
+      if (s === focus) { fo = true; outline.position.copy(_p); outline.scale.setScalar(1.35 * scaleK); }
+      _sk.set(scaleK, scaleK, scaleK);
+      _m.compose(_p, _q.identity(), _sk);
       iChassis.setMatrixAt(i, _m); iCover.setMatrixAt(i, _m); iAnt.setMatrixAt(i, _m);
       _a.copy(_p); _a.y += 0.04 * s.lift;
-      _m.compose(_a, _q.identity(), _one); iDeck.setMatrixAt(i, _m);
-      _m.compose(_p, _q.identity(), s.ring > 0.01 ? _one : _s.set(0.0001, 0.0001, 0.0001)); iRing.setMatrixAt(i, _m); _s.set(1, 1, 1);
-      _m.compose(_p, _q.identity(), _one); iBar.setMatrixAt(i, _m);
+      _m.compose(_a, _q.identity(), _sk); iDeck.setMatrixAt(i, _m);
+      _m.compose(_p, _q.identity(), (s.ring > 0.01 || (s.actor && s.actor.busy)) ? _sk : _s.set(0.0001, 0.0001, 0.0001)); iRing.setMatrixAt(i, _m); _s.set(1, 1, 1);
+      _m.compose(_p, _q.identity(), _sk); iBar.setMatrixAt(i, _m);
       let c = STATUS_COLOR[s.status] ?? STATUS_COLOR.ok;
       if (s.status === 'fault' && Math.floor(time) % 2 === 1) c = 0x330806;           // blinks at 1 Hz
       col.set(c); iBar.instanceColor.setXYZ(i, col.r, col.g, col.b);
       const phi = s.turn * Math.PI / 2, cs = Math.cos(phi), sn = Math.sin(phi);
       for (let k = 0; k < 8; k++) {
-        const [lu, lv] = wl[k], uu = s.u + lu * cs - lv * sn, vv = s.v + lu * sn + lv * cs;
+        const [lu, lv] = wl[k], uu = s.u + (lu * cs - lv * sn) * scaleK, vv = s.v + (lu * sn + lv * cs) * scaleK;
         f.pos(uu, vv, s.z + 0.045, _a);
         f.dir(cs, sn, axle).normalize();
         _q.setFromUnitVectors(baseAxis, axle);
         _q2.setFromAxisAngle(axle, s.roll / 0.045); _q2.multiply(_q);
-        _m.compose(_a, _q2, _one); iWheel.setMatrixAt(i * 8 + k, _m);
+        _m.compose(_a, _q2, _sk); iWheel.setMatrixAt(i * 8 + k, _m);
       }
     }
     for (const m of [iChassis, iCover, iDeck, iBar, iRing, iAnt]) { m.count = ns; m.instanceMatrix.needsUpdate = true; }
     iWheel.count = ns * 8; iWheel.instanceMatrix.needsUpdate = true;
     iBar.instanceColor.needsUpdate = true;
+    outline.visible = fo;
   }
-  return { group: g, update, pick: iChassis, count: n, order };
+  return { group: g, update, pick: iChassis, count: n, order,
+    /** visual scale of the shuttle bodies (1.25 in focus mode); trails on / off; the shuttle state to outline (or null) */
+    setScale(k) { if (k !== scaleK) { scaleK = k; if (lastStates) update(lastStates, lastTime); } },
+    setTrails(on) { trailsOn = !!on; trail.visible = trailsOn; if (!on) { hist.forEach((h2) => { h2.length = 0; }); tGeo.setDrawRange(0, 0); } },
+    setFocus(s) { focus = s || null; if (lastStates) update(lastStates, lastTime); } };
 }
 
 // ===================================================================== lifts
@@ -91,10 +129,15 @@ export function makeLift(world, spec, idx) {
   for (let t = 0; t < tiers; t++) for (const sgn of dirs) stubs.push(cbox(f, 0.8, fd - 0.2, 0.1, sgn * (fw / 2 + 0.4), 0, tz[t] + 0.08));
   const stubMesh = new THREE.Mesh(merge(stubs), world.own(matFrom('conveyorFrame'))); g.add(stubMesh);
   // yellow guarding cage up to 2.2 m (28 % mesh)
-  const cageMat = world.own(matFrom('liftCage', { side: THREE.DoubleSide }));
+  const cageMat = world.own(matFrom('liftCage', { side: THREE.DoubleSide, color: 0x9468e0, opacity: 0.3 }));
   const cageParts = [cbox(f, fw + 0.4, 0.02, 2.2, 0, fd / 2 + 0.25, 1.1), cbox(f, fw + 0.4, 0.02, 2.2, 0, -(fd / 2 + 0.25), 1.1)];
   if (!spec.shaft) cageParts.push(cbox(f, 0.02, fd + 0.5, 2.2, fw / 2 + 0.2, 0, 1.1), cbox(f, 0.02, fd + 0.5, 2.2, -(fw / 2 + 0.2), 0, 1.1));
   g.add(new THREE.Mesh(merge(cageParts), cageMat));
+  // R26d V7: violet tier ticks on the mast (one per tier landing), a focus outline box
+  { const ticks = []; for (let t = 0; t < tiers; t++) ticks.push(cbox(f, fw + 0.3, 0.07, 0.14, 0, fd / 2 + 0.1, tz[t] + 0.3));
+    g.add(new THREE.Mesh(merge(ticks), world.own(new THREE.MeshStandardMaterial({ color: 0x9468e0, emissive: 0x7a4fc4, emissiveIntensity: 0.6, roughness: 0.5 })))); }
+  const outl = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(...f.size(fw + 1.0, fd + 1.0, hm).toArray())), world.own(new THREE.LineBasicMaterial({ color: 0xffd23f, toneMapped: false, depthTest: false })));
+  outl.position.copy(f.pos(0, 0, hm / 2)); outl.visible = false; outl.renderOrder = 45; g.add(outl);
   // group colour ring at the base
   const gc = spec.group === 'IN' ? ROLES.in.hex : spec.group === 'OUT' ? ROLES.out.hex : ROLES.structure.hex;
   const ringMat = world.own(new THREE.MeshStandardMaterial({ color: gc, emissive: gc, emissiveIntensity: 0.5, roughness: 0.5 }));
@@ -103,7 +146,7 @@ export function makeLift(world, spec, idx) {
   beacon.position.copy(f.pos(fw / 2 + 0.06, fd / 2 + 0.06, 2.3)); g.add(beacon);
   // carriage: yellow frame + chain conveyor (+ pallet seat at 0.16 above its level)
   const car = new THREE.Group(); car.name = 'carriage'; g.add(car);
-  const frameM = world.own(matFrom('liftCarriage'));
+  const frameM = world.own(matFrom('liftCarriage', { color: 0x9468e0, emissive: 0x5a2fb0, emissiveIntensity: 0.3 }));     // R26d V7: lift = violet role (old: safety yellow, no role)
   const frameGeo = merge([cbox(f, fw, 0.08, 0.1, 0, fd / 2 - 0.04, 0.05), cbox(f, fw, 0.08, 0.1, 0, -(fd / 2 - 0.04), 0.05), cbox(f, 0.1, fd, 0.1, fw / 2 - 0.05, 0, 0.05), cbox(f, 0.1, fd, 0.1, -(fw / 2 - 0.05), 0, 0.05),
     cbox(f, 0.05, 0.05, 0.3, fw / 2 - 0.1, fd / 2 - 0.1, 0.25), cbox(f, 0.05, 0.05, 0.3, fw / 2 - 0.1, -(fd / 2 - 0.1), 0.25)]);
   const fm = new THREE.Mesh(frameGeo, frameM); fm.castShadow = true; car.add(fm);
@@ -120,7 +163,7 @@ export function makeLift(world, spec, idx) {
   cw.position.copy(f.pos(-(fw / 2 + 0.06), 0, 0)); g.add(cw);
   const base = f.pos(spec.u, spec.v, 0); g.position.copy(base);
   const api = {
-    spec, group: g, car, z: 0, hm, cw,
+    spec, group: g, car, z: 0, hm, cw, outline: outl,
     setZ(z) { api.z = z; car.position.y = z; cw.position.y = Math.max(0.6, hm - z - 0.6); },
     get seatZ() { return api.z + world.ZR; },
     /** R9b contingency: a lift that is down shows a red beacon and a grey-red ring */

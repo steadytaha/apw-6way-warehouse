@@ -27,7 +27,7 @@ export function defaultShots(rep, world, sim) {
   const util = kpi('queues.rho_shuttle');
   const dxy = dock ? [dock.nx, dock.ny] : [-1, 0];
   const out = [];
-  out.push({ name: 'Exterior', dur: 10, env: 'dusk', shell: 'closed',
+  out.push({ name: 'Exterior', dur: 10, env: 'studio', shell: 'closed',
     from: { pos: [cx + dxy[0] * diag * 1.45 + dxy[1] * diag * 0.5, cyy + dxy[1] * diag * 1.45 - dxy[0] * diag * 0.5, diag * 0.3], target: [cx, cyy, B.H * 0.35], fov: 36 },
     to: { pos: [cx + dxy[0] * diag * 0.85 + dxy[1] * diag * 0.35, cyy + dxy[1] * diag * 0.85 - dxy[0] * diag * 0.35, diag * 0.17], target: [cx, cyy, B.H * 0.4], fov: 36 },
     text: `${fmtNum(B.L, 0)} × ${fmtNum(B.W, 0)} × ${fmtNum(B.H, 0)} m building` });

@@ -2,6 +2,10 @@
 // The tracer is a marker on the carriers' own geometry (conveyor line, lift mast, aisle, lane); a label names the stage and shows the model seconds. It does not change the animation.
 import { THREE } from './kit.js';
 
+// R26d V7: the route is drawn as a 3D polyline (one tube per stage, four phase colours, numbered markers 1 to 9 that appear in step with the ghost pallet).
+// Phases as in the story chart (chapters.js PHASE): Truck and dock, Conveyor and bay, Lift, Shuttle and lane (brighter variants of the ROLES for the 3D view).
+const PHASE_OF = { forklift: 0, truck: 0, dock: 0, conveyor: 1, bay: 1, lift: 2, shuttle: 3 };
+const PHASE_COLOR = (flow) => [0xb8c4d0, flow === 'OUT' ? 0x5a9bff : 0x2fd6a8, 0xa585ee, 0xffa83a];
 const STAGE_COLOR = { forklift: 0xe0b020, conveyor: 0x1f8a70, bay: 0x6f7fdc, lift: 0xd9621f, shuttle: 0x2f5fb3 };
 
 function labelTex() {
@@ -23,6 +27,23 @@ export function createIOPath(rep, comp, host) {
   const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.85, toneMapped: false, depthTest: false }));
   trail.renderOrder = 39; trail.frustumCulled = false;
   grp.add(marker, halo, sprite, trail);
+  const pathGrp = new THREE.Group(); pathGrp.name = 'io polyline'; grp.add(pathGrp);
+  const pathMats = [], pathSegs = [];
+  function clearPath() { for (const o of [...pathGrp.children]) { pathGrp.remove(o); o.geometry && o.geometry.dispose(); } pathMats.forEach((m) => m.dispose()); pathMats.length = 0; pathSegs.length = 0; host.pathLabels && host.pathLabels(null); }
+  function buildPath(r) {
+    clearPath();
+    const cols = PHASE_COLOR(r.flow), defs = [];
+    r.stages.forEach((s, k) => {
+      const col = cols[PHASE_OF[s.resource] ?? 3], a = v3(s.a), b = v3(s.b);
+      const mat = new THREE.MeshBasicMaterial({ color: col, toneMapped: false, depthTest: false, transparent: true, opacity: 0.95 }); pathMats.push(mat);
+      const len = a.distanceTo(b), seg = new THREE.Group(); seg.visible = false; seg.renderOrder = 38;
+      if (len > 0.05) { const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, len, 8), mat); tube.position.copy(a).add(b).multiplyScalar(0.5); tube.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); tube.renderOrder = 38; seg.add(tube); }
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 8), mat); dot.position.copy(a); dot.renderOrder = 38; seg.add(dot);
+      pathGrp.add(seg); pathSegs.push(seg);
+      defs.push({ id: `path:${k}`, kind: 'path', text: String(k + 1), color: col, prio: 0.5, reveal: () => state.stage >= k, getPos: () => new THREE.Vector3(a.x, a.y + 0.8, a.z) });
+    });
+    host.pathLabels && host.pathLabels(defs);
+  }
   const state = { running: false, mode: null, t: 0, route: null, stage: -1, done: null, follow: false };
 
   function route(mode) {
@@ -77,30 +98,30 @@ export function createIOPath(rep, comp, host) {
       if (!mode || !io) return null;
       const r = route(String(mode).toLowerCase()); if (!r) return null;
       state.route = r; state.t = 0; state.stage = -1; state.running = true; state.mode = mode; state.follow = !!opts.follow; state.span = opts.seconds || 16;
-      pts.length = 0; grp.visible = true; trailGeo.setDrawRange(0, 0);
+      buildPath(r); pts.length = 0; grp.visible = true; trailGeo.setDrawRange(0, 0);
       if (state.follow && host.followTarget) host.followTarget(() => marker.position.clone(), 24);
       host.invalidate(); return new Promise((res) => { state.done = res; });
     },
-    stop() { if (!state.running && !grp.visible) return; state.running = false; grp.visible = false; if (state.done) { state.done(false); state.done = null; } host.invalidate(); },
+    stop() { if (!state.running && !grp.visible) return; state.running = false; grp.visible = false; clearPath(); if (state.done) { state.done(false); state.done = null; } host.invalidate(); },
     update(dt) {
       if (!state.running) return false;
       const r = state.route, k = r.total / state.span;               // model seconds per wall second
       state.t += dt * k;
       let acc = 0, i = 0;
       for (; i < r.stages.length; i++) { const d = Math.max(0.5, r.stages[i].time_s); if (state.t < acc + d) break; acc += d; }
-      if (i >= r.stages.length) { state.running = false; if (state.done) { state.done(true); state.done = null; } setTimeout(() => { if (!state.running) { grp.visible = false; host.invalidate(); } }, 1500); return true; }
+      if (i >= r.stages.length) { state.running = false; if (state.done) { state.done(true); state.done = null; } setTimeout(() => { if (!state.running) { grp.visible = false; clearPath(); host.invalidate(); } }, 1500); return true; }
       const s = r.stages[i], d = Math.max(0.5, s.time_s), e = (state.t - acc) / d;
       const sm = e * e * (3 - 2 * e);
       const p = [0, 1, 2].map((j) => s.a[j] + (s.b[j] - s.a[j]) * sm);
       if (i !== state.stage) {
-        state.stage = i; setLabel(`${i + 1}/${r.stages.length}  ${s.label}`, `${s.resource} · ${s.time_s.toFixed(1)} s (model)`, STAGE_COLOR[s.resource] || 0xffd23f);
+        state.stage = i; pathSegs.forEach((sg, q) => { sg.visible = q <= i; }); setLabel(`${i + 1}/${r.stages.length}  ${s.label}`, `${s.resource} · ${s.time_s.toFixed(1)} s (model)`, STAGE_COLOR[s.resource] || 0xffd23f);
         host.onStage && host.onStage({ flow: r.flow, index: i, stage: s });
       }
       place(p, i);
       pts.push(v3(p)); if (pts.length > 160) pts.shift(); pts.forEach((q, j) => trailPos.setXYZ(j, q.x, q.y, q.z)); trailPos.needsUpdate = true; trailGeo.setDrawRange(0, pts.length);
       return true;
     },
-    dispose() { grp.parent && grp.parent.remove(grp); lt.t.dispose(); marker.geometry.dispose(); marker.material.dispose(); halo.geometry.dispose(); halo.material.dispose(); sprite.material.dispose(); trail.geometry.dispose(); trail.material.dispose(); },
+    dispose() { clearPath(); grp.parent && grp.parent.remove(grp); lt.t.dispose(); marker.geometry.dispose(); marker.material.dispose(); halo.geometry.dispose(); halo.material.dispose(); sprite.material.dispose(); trail.geometry.dispose(); trail.material.dispose(); },
   };
   return api;
 }

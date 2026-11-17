@@ -2,7 +2,8 @@
 // (the old canvas sprites scaled with the camera distance and read 6 to 60 px). A greedy declutter (every 250 ms) keeps at most `max` labels (12 in the expanded view),
 // highest priority first, never two overlapping and never one inside an "avoid" rectangle (the caption and chart panels of the guided demo). Priority: selected > story subject
 // > resources > zones > people. A label is a colour dot (the role colour) plus words, so colour never carries the meaning alone.
-// Not done (V7): a depth test against the rack (labels behind the rack stay visible; the declutter keeps them apart and out of the caption).
+// R26d V7: occlusion: a label whose point lies behind (or inside) a rack block, seen from the camera, is hidden (segment against the rack boxes, tested in the 250 ms pass; a label comes back at the next pass, so a flicker
+// shorter than 0.25 s cannot happen). Old cause: labels behind the rack stayed visible and read as pointing at the wrong thing (audit E3). Kinds 'path' and 'shot' are never occluded.
 import { THREE } from './kit.js';
 import { h, reducedMotion } from '../ui.js';
 
@@ -13,7 +14,8 @@ export function createLabels(stage, camera, { max = 8, maxFull = 12 } = {}) {
   const layer = h('div.sc-labels', { 'aria-hidden': 'true' });
   stage.append(layer);
   const items = new Map();                                   // id -> { def, el, w, hh, on, sx, sy }
-  let filter = () => true, avoid = () => [], lastDecl = -1e9, full = false;
+  let filter = () => true, avoid = () => [], lastDecl = -1e9, full = false, occluders = [];
+  const ray = new THREE.Ray(), hitP = new THREE.Vector3();
   const v = new THREE.Vector3();
   const noMotion = reducedMotion();
 
@@ -48,10 +50,19 @@ export function createLabels(stage, camera, { max = 8, maxFull = 12 } = {}) {
     const av = avoid().map((r) => ({ x0: r.left - sr.left, y0: r.top - sr.top, x1: r.right - sr.left, y1: r.bottom - sr.top }));
     cand.sort((a, b) => (a.def.prio ?? PRIO.zone) - (b.def.prio ?? PRIO.zone) || a.z - b.z);
     const taken = [], cap = full ? maxFull : max;
+    const camP = camera.position;
+    const hidden = (it) => {
+      if (!occluders.length || it.def.kind === 'path' || it.def.kind === 'shot') return false;
+      const p = it.def.getPos(), dist = camP.distanceTo(p);
+      ray.origin.copy(camP); ray.direction.copy(p).sub(camP).normalize();
+      for (const b of occluders) { if (ray.intersectBox(b, hitP) && hitP.distanceTo(camP) < dist - 0.05) return true; }
+      return false;
+    };
     for (const it of cand) {
+      it.occ = hidden(it);
       const r = { x0: it.sx - it.w / 2 - 2, x1: it.sx + it.w / 2 + 2, y0: it.sy - it.hh - 8, y1: it.sy + 2 };
       const hit = (q) => r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0;
-      const keep = taken.length < cap && r.x0 >= 0 && r.x1 <= W && r.y0 >= 0 && r.y1 <= H && !av.some(hit) && !taken.some(hit);
+      const keep = !it.occ && taken.length < cap && r.x0 >= 0 && r.x1 <= W && r.y0 >= 0 && r.y1 <= H && !av.some(hit) && !taken.some(hit);
       it.show = keep; if (keep) taken.push(r);
     }
     for (const it of items.values()) {
@@ -65,6 +76,7 @@ export function createLabels(stage, camera, { max = 8, maxFull = 12 } = {}) {
     add, clear, update, shown,
     setFilter(fn) { filter = fn || (() => true); lastDecl = -1e9; },
     setAvoid(fn) { avoid = fn || (() => []); lastDecl = -1e9; },
+    setOccluders(boxes) { occluders = boxes || []; lastDecl = -1e9; },
     setFull(on) { full = !!on; lastDecl = -1e9; },
     get count() { return items.size; },
     dispose() { layer.remove(); items.clear(); },

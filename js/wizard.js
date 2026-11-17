@@ -3,15 +3,16 @@
 import { h, icon, fmtNum, riseIn, announce, $ } from './ui.js';
 import { state, save, defaultRaw } from './store.js';
 import { go } from './nav.js';
+import { createPlanPreview } from './preview.js';
 import { renderField, renderPlan, check, choiceLabel, WALLS, asPercent, PCT_KEYS } from './fields.js';
 
 // ---------------------------------------------------------------- step definitions
 const STEP_META = {
   building: { title: 'Building', lead: 'Length, width and clear height. This is all the model needs; everything after this step is optional.' },
   areas: { title: 'Shape and areas', lead: 'Footprint shape, tier limit, fire strategy and the share of floor kept for operations and for growth.', auto: 'Rectangle, 15 % operations, 15 % expansion reserve, areas inside, in-rack sprinklers, tiers from the height and the fire rule.' },
-  bays: { title: 'Bays', lead: 'Where the goods-in (IN) and goods-out (OUT) docks sit. Tap a wall on the plan to fix a dock, or let the model choose the dock case.', auto: 'The model picks the dock case (U, I, L, 2+2, 1+2) with the best IN / OUT path that still holds the capacity.' },
+  // R26d V11 (team decision 2026-11-17): the 'Bays' and 'Lifts' steps are one step, 'Docks and lifts' (old: 8 steps with Review; now 7). The step id stays 'bays' (routes, saved state, review links).
+  bays: { title: 'Docks and lifts', lead: 'Where the goods-in (IN) and goods-out (OUT) docks sit and where the lifts stand. Tap a wall on the plan to fix a dock; every lift carries a shuttle and the model decides how many.', auto: 'The model picks the dock case (U, I, L, 2+2, 1+2) with the best IN / OUT path that still holds the capacity, and searches aisle-head lifts (one or two ends), inner stations and cross-aisle lifts, and says why the winner wins.' },
   racks: { title: 'Racks', lead: 'Lane depth, aisle direction and ABC slotting of the pallet positions.' },
-  lifts: { title: 'Lifts', lead: 'Where the lifts stand. Every lift carries a shuttle; the model decides how many.', auto: 'The model searches aisle-head lifts (one or two ends), inner stations and cross-aisle lifts, and says why the winner wins.' },
   flows: { title: 'Flows and service', lead: 'IN and OUT flows with their hours, the capacity target and the truck-bay service level.' },
   advanced: { title: 'Advanced', lead: 'Lift mode, fleet policy and model assumptions that normally stay at their defaults.' },
 };
@@ -24,11 +25,11 @@ const KEY_STEP = {
   in_wall: 'bays', in_pos: 'bays', out_wall: 'bays', out_pos: 'bays', dock_case: 'bays',
   depth: 'racks', orient: 'racks', abc: 'racks', abc_skew: 'racks',        // FIX (R13b): abc_skew, t_board, h_vendor_max, f_io_lim were missing here (R12 inputs)
   h_vendor_max: 'areas', f_io_lim: 'flows', t_board: 'advanced',
-  lift_positions: 'lifts', lift_kinds: 'lifts', lift_k: 'lifts', grid_k: 'lifts',
+  lift_positions: 'bays', lift_kinds: 'bays', lift_k: 'bays', grid_k: 'bays',     // R26d V11: lifts share the docks step
   in_h: 'flows', out_h: 'flows', in_hours: 'flows', out_hours: 'flows', cap_target: 'flows', cap_sl: 'flows', stock_cv: 'advanced', push_to_max: 'flows', level_of_service: 'flows', case: 'flows',
   lift_mode: 'advanced', fleet_policy: 'advanced', front_turns: 'advanced', front_channel: 'advanced', roof: 'advanced',
 };
-const STEP_ORDER = ['building', 'areas', 'bays', 'racks', 'lifts', 'flows', 'advanced'];
+const STEP_ORDER = ['building', 'areas', 'bays', 'racks', 'flows', 'advanced'];
 const GOAL_LABEL = { pallets: 'Pallets', positions: 'Positions', capex_eur: 'CAPEX', annual_eur: 'Annual cost' };
 // FIX (R18e, A9-8): 'shape' (any / rect / L / U / T) is a primary Optimal limit and the older allow_shapes switch is hidden (shape = rect says the same). Old cause: the Optimal wizard offered only the allow_shapes on / off switch, so L / U / T could not be asked for.
 const PRIMARY_CONSTRAINTS = ['h_max', 'max_aspect', 'depths', 'shape'];
@@ -191,7 +192,7 @@ function describe(f, raw) {
 function briefNote() {
   const fl = state.schema.flows;
   const row = (a, b) => h('div.kv', h('dt', a), h('dd.num', b));
-  const el = h('details.aside', { open: true },
+  const el = h('details.aside',
     h('summary', icon('info', 'sm'), 'Fixed by the brief'),
     h('dl',
       row('Flow IN', `${fl.in_per_h} pallets/h`), row('Flow OUT', `${fl.out_per_h} pallets/h`),
@@ -201,7 +202,6 @@ function briefNote() {
       row('Transfer', '25 s shuttle hand-over; 7 s at a conveyor'),
     ),
     h('p.cap', 'Source: APW brief, slides 11 and 12. The model keeps these constant.'));
-  if (matchMedia('(max-width: 60rem)').matches) el.removeAttribute('open');
   return el;
 }
 
@@ -385,6 +385,7 @@ export function mountWizard(mode, stepId) {
   const nextBtn = h('button.btn.primary', { type: 'button' }, 'Next', icon('next', 'sm'));
   const backBtn = h('button.btn', { type: 'button', onclick: () => (idx === 0 ? go('/choose') : go(prefix + steps[idx - 1].id)) }, icon('back', 'sm'), idx === 0 ? 'Choose' : 'Back');
   const issue = h('p.msg.err.nav-msg', { role: 'status', hidden: true });
+  const pv = createPlanPreview({ mode, layers: ['building', 'docks', 'racks', 'lifts'], schematic: mode !== 'fixed' });
   const syncNav = () => {
     let ok = true;
     if (step.id === 'review') {
@@ -396,6 +397,7 @@ export function mountWizard(mode, stepId) {
       ok = buildingOk();
     }
     nextBtn.setAttribute('aria-disabled', !ok);
+    pv.update();      // R26d V11: the live plan preview follows every field
   };
   nextBtn.addEventListener('click', () => {
     if (step.id === 'review') {
@@ -411,6 +413,7 @@ export function mountWizard(mode, stepId) {
   });
   if (step.id === 'review') { nextBtn.replaceChildren(icon('play', 'sm'), mode === 'fixed' ? 'Run the model' : 'Run the search'); nextBtn.classList.add('lg'); }
 
+  // R26d V11: live plan preview on the right of every step (replaces the constants card, which is now a collapsed "Fixed by the brief" under it)
   const panel = h('section.panel');
   const head = h('header.panel-head', h('p.eyebrow', `Step ${idx + 1} of ${steps.length}`), h('h1', { tabindex: '-1' }, step.title), h('p.lead', step.lead));
   panel.append(head);
@@ -441,7 +444,7 @@ export function mountWizard(mode, stepId) {
   panel.append(issue, h('footer.wz-nav', backBtn, nextBtn));
 
   const el = h('div.screen.wizard', h('div.wz-top', h('p.eyebrow.mode', icon(mode === 'fixed' ? 'building' : 'target', 'sm'), title), stepper),
-    h('div.wz-grid', panel, h('aside.wz-aside', briefNote())));
+    h('div.wz-grid', panel, h('aside.wz-aside', h('div.card.pv-card', h('p.eyebrow', 'Your inputs, as a plan'), pv.el), briefNote())));
   syncNav();
   riseIn([head, body.el, ...el.querySelectorAll('.wz-aside')]);
   return { el };
@@ -522,7 +525,7 @@ function reviewFixed() {
     if (!st.manual[s.id]) { list.append(row(s.title, h('span.muted', 'Model chooses'), s.id, 'fixed')); continue; }
     const ctx = ctxFor('fixed', s.fields);
     const txt = s.id === 'bays'
-      ? `IN: ${WALLS[ctx.get('in_wall')]} wall at ${ctx.get('in_pos')}; OUT: ${WALLS[ctx.get('out_wall')]} wall at ${ctx.get('out_pos')}`
+      ? [`IN: ${WALLS[ctx.get('in_wall')]} wall at ${ctx.get('in_pos')}; OUT: ${WALLS[ctx.get('out_wall')]} wall at ${ctx.get('out_pos')}`].concat(s.fields.filter((f) => !DOCK_KEYS.includes(f.key)).map((f) => `${f.label}: ${describe(f, ctx.get(f.key))}`)).join(' · ')
       : s.fields.map((f) => `${f.label}: ${describe(f, ctx.get(f.key))}`).join(' · ');
     list.append(row(s.title, txt, s.id, 'fixed'));
   }

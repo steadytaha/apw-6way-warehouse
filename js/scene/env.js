@@ -1,9 +1,9 @@
-// Lighting rig and environment presets (B4): day / dusk / lightsOut from tokens.js ENVIRONMENTS. One sun with one shadow map, hemisphere + ambient,
+// Lighting rig and environment presets (B4): day / studio (R26d V7, replaces dusk) / lightsOut from tokens.js ENVIRONMENTS. One sun with one shadow map, hemisphere + ambient,
 // a small procedural sky for image-based light, up to two pool lights in lightsOut, emissive luminaires (no real light per luminaire), FogExp2.
 import { THREE, clamp } from './kit.js';
 import { ENVIRONMENTS } from '../../design/tokens.js';
 
-const ENV_INTENSITY = { day: 0.6, dusk: 0.32, lightsOut: 0.34 };      // procedural sky intensity (spec: 0.6 in the day)
+const ENV_INTENSITY = { day: 0.6, studio: 0.45, lightsOut: 0.34 };      // procedural sky intensity (spec: 0.6 in the day)
 const STRIP_BASE = 3.0;                                              // lightStrip emissiveIntensity at dim level 1 (tokens.js)
 
 let skyRT = null;
@@ -49,14 +49,14 @@ export function createEnv(renderer, scene, world, { shadows = true, shadowSize =
   scene.fog = new THREE.FogExp2(0xdfe6ec, 0.0035);
   scene.background = new THREE.Color(0xdfe6ec);
 
-  const cur = { bg: new THREE.Color(), fog: new THREE.Color(), fogD: 0, sky: new THREE.Color(), gnd: new THREE.Color(), hemiI: 1, sunC: new THREE.Color(), sunI: 1, sunP: new THREE.Vector3(), exp: 1, strips: 1, amb: 0.3, envI: 0.6, pool: 0 };
-  const goal = { bg: new THREE.Color(), fog: new THREE.Color(), fogD: 0, sky: new THREE.Color(), gnd: new THREE.Color(), hemiI: 1, sunC: new THREE.Color(), sunI: 1, sunP: new THREE.Vector3(), exp: 1, strips: 1, amb: 0.3, envI: 0.6, pool: 0 };
+  const cur = { bg: new THREE.Color(), fog: new THREE.Color(), fogD: 0, sky: new THREE.Color(), gnd: new THREE.Color(), hemiI: 1, sunC: new THREE.Color(), sunI: 1, sunP: new THREE.Vector3(), exp: 1, strips: 1, amb: 0.3, envI: 0.6, pool: 0, studio: 0 };
+  const goal = { bg: new THREE.Color(), fog: new THREE.Color(), fogD: 0, sky: new THREE.Color(), gnd: new THREE.Color(), hemiI: 1, sunC: new THREE.Color(), sunI: 1, sunP: new THREE.Vector3(), exp: 1, strips: 1, amb: 0.3, envI: 0.6, pool: 0, studio: 0 };
   let name = 'day', changed = true;
   function define(n, g) {
     const e = ENVIRONMENTS[n];
     g.bg.set(e.background); g.fog.set(e.fog.color); g.fogD = e.fog.density; g.sky.set(e.hemi.sky); g.gnd.set(e.hemi.ground); g.hemiI = e.hemi.intensity;
     if (e.sun) { g.sunC.set(e.sun.color); g.sunI = e.sun.intensity; g.sunP.set(e.sun.position[0], e.sun.position[1], e.sun.position[2]); } else { g.sunI = 0; }
-    g.exp = e.exposure; g.strips = e.interior.strips; g.amb = e.interior.ambient; g.envI = ENV_INTENSITY[n]; g.pool = e.interior.pool ? e.interior.pool.intensity : 0;
+    g.exp = e.exposure; g.strips = e.interior.strips; g.amb = e.interior.ambient; g.envI = ENV_INTENSITY[n]; g.pool = e.interior.pool ? e.interior.pool.intensity : 0; g.studio = n === 'studio' ? 1 : 0;
   }
   function apply(c) {
     scene.background.copy(c.bg); scene.fog.color.copy(c.fog); scene.fog.density = c.fogD;
@@ -66,11 +66,16 @@ export function createEnv(renderer, scene, world, { shadows = true, shadowSize =
     renderer.toneMappingExposure = c.exp; amb.intensity = c.amb; scene.environmentIntensity = c.envI;
     if (world.lumMat) world.lumMat.emissiveIntensity = STRIP_BASE * c.strips;
     if (world.rooflightMat) world.rooflightMat.emissiveIntensity = 0.1 + 0.4 * (name === 'day' ? 1 : 0.3);
+    // R26d V7: Studio dark = neutral dark floor (about #20242a) and pallets / cartons 1.2x brighter so the load reads against the dark room (old cause: in the dusk environment the grey-blue floor and the dim pallets blended)
+    for (const fm of world.floorMats || []) fm.color.setScalar(1 - 0.78 * c.studio);
+    for (const am of world.apronMats || []) am.color.setScalar(1 - 0.85 * c.studio);
+    for (const sct of world.sections || []) { sct.w.studioBoost = 1 + 0.2 * c.studio; sct.w.applyDim(); }
     for (const p of pools) { p.intensity = c.pool; p.visible = c.pool > 0.5; }
   }
   const api = {
     sun, pools, get name() { return name; }, get changed() { return changed; },
     set(n, instant = false) {
+      if (n === 'dusk') n = 'studio';               // saved preference of the old "Dusk" environment
       if (!ENVIRONMENTS[n]) throw new Error('unknown environment ' + n);
       name = n; define(n, goal);
       if (instant) { copy(cur, goal); apply(cur); }
@@ -82,7 +87,7 @@ export function createEnv(renderer, scene, world, { shadows = true, shadowSize =
       const k = 1 - Math.exp(-dt * 7);
       let moving = false;
       const near = (a, b) => Math.abs(a - b) < 1e-3;
-      for (const key of ['fogD', 'hemiI', 'sunI', 'exp', 'strips', 'amb', 'envI', 'pool']) { if (!near(cur[key], goal[key])) { cur[key] += (goal[key] - cur[key]) * k; moving = true; } else cur[key] = goal[key]; }
+      for (const key of ['fogD', 'hemiI', 'sunI', 'exp', 'strips', 'amb', 'envI', 'pool', 'studio']) { if (!near(cur[key], goal[key])) { cur[key] += (goal[key] - cur[key]) * k; moving = true; } else cur[key] = goal[key]; }
       for (const key of ['bg', 'fog', 'sky', 'gnd', 'sunC']) { if (Math.abs(cur[key].r - goal[key].r) + Math.abs(cur[key].g - goal[key].g) + Math.abs(cur[key].b - goal[key].b) > 1e-3) { cur[key].lerp(goal[key], k); moving = true; } }
       if (cur.sunP.distanceTo(goal.sunP) > 1e-2) { cur.sunP.lerp(goal.sunP, k); moving = true; }
       if (moving || changed) { apply(cur); changed = moving; if (shadows && moving) sun.shadow.needsUpdate = true; }

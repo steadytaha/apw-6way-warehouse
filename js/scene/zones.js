@@ -27,15 +27,20 @@ export function buildZones(rep, secInfo, world, opt = {}) {
     const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), own(new THREE.LineBasicMaterial({ color, transparent: true, opacity: op, depthWrite: false })));
     parent.add(l); return l;
   };
+  // R26d V7 (draw calls): zone volumes and their outlines are merged per colour / opacity, the bays per flow, the static props per material (old: one mesh per zone volume, per outline line, per bay, per prop part:
+  // 124 draw calls on the example). Nothing is picked or animated here; the bays of one flow share a material because setDockDown fades a whole flow.
+  const volAcc = new Map(), lineAcc = new Map();
+  const accVol = (geo, col, op) => { const k = col + '|' + op; if (!volAcc.has(k)) volAcc.set(k, { col, op, geos: [] }); volAcc.get(k).geos.push(geo); };
+  const accLines = (pts, col, op) => { const k = col + '|' + op; if (!lineAcc.has(k)) lineAcc.set(k, { col, op, v: [] }); const a = lineAcc.get(k).v; for (let i = 0; i + 1 < pts.length; i++) a.push(pts[i], pts[i + 1]); };
+  const rectPts = (x, y, w, h, z) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]].map(([a, b]) => new THREE.Vector3(a, z, -b));
   const zones = (sc.zones || []).filter((z) => z.rect && z.rect.w > 0.2 && z.rect.h > 0.2);
   const zoneObjs = {};
   for (const z of zones) {
     const r = z.rect, col = z.key === 'charging' || z.key === 'forklift_charging' ? 0xe0b020 : (GROUP_COLOR[z.group] || GROUP_COLOR.other);
     const mezz = z.level === 'mezzanine';
     const z0 = mezz ? MZ_Z : 0.02, h = mezz ? MZ_H : ZH;
-    const vol = new THREE.Mesh(new THREE.BoxGeometry(r.w - 0.06, h, r.h - 0.06), own(new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: mezz ? 0.13 : 0.11, depthWrite: false, toneMapped: false })));
-    vol.position.set(r.x + r.w / 2, z0 + h / 2, -(r.y + r.h / 2)); vol.renderOrder = 5; volumes.add(vol);
-    outline(r.x + 0.03, r.y + 0.03, r.w - 0.06, r.h - 0.06, z0 + h, col, volumes, 0.8); outline(r.x + 0.03, r.y + 0.03, r.w - 0.06, r.h - 0.06, z0 + 0.02, col, volumes, 0.6);
+    accVol(new THREE.BoxGeometry(r.w - 0.06, h, r.h - 0.06).translate(r.x + r.w / 2, z0 + h / 2, -(r.y + r.h / 2)), col, mezz ? 0.13 : 0.11);
+    accLines(rectPts(r.x + 0.03, r.y + 0.03, r.w - 0.06, r.h - 0.06, z0 + h), col, 0.8); accLines(rectPts(r.x + 0.03, r.y + 0.03, r.w - 0.06, r.h - 0.06, z0 + 0.02), col, 0.6);
     if (mezz) {                                            // mezzanine slab above the dock zone (areas.mezzanine: fits above the in-side dock zone)
       const slab = new THREE.Mesh(new THREE.BoxGeometry(r.w, 0.22, r.h), own(matFrom('wallPlinth', { color: 0xc4cad1 }))); slab.position.set(r.x + r.w / 2, MZ_Z - 0.11, -(r.y + r.h / 2)); slab.castShadow = true; slab.receiveShadow = true; static_.add(slab);
       for (const [px, py] of [[r.x + 0.15, r.y + 0.15], [r.x + r.w - 0.15, r.y + 0.15], [r.x + 0.15, r.y + r.h - 0.15], [r.x + r.w - 0.15, r.y + r.h - 0.15]]) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.2, MZ_Z - 0.2, 0.2), own(matFrom('rackUpright'))); c.position.set(px, (MZ_Z - 0.2) / 2, -py); static_.add(c); }
@@ -48,8 +53,10 @@ export function buildZones(rep, secInfo, world, opt = {}) {
       const m = new THREE.Mesh(new THREE.BoxGeometry(sx, h, sy), wm); m.position.set(cx, z0 + h / 2, -cy); walls.add(m);
     }
     labelDefs.push({ id: 'zone:' + z.key, kind: 'zone', text: nameOf(z.name.replace(/ \(.*\)$/, '')), color: col, prio: 3 + (mezz ? 0.2 : 0) - Math.min(0.9, (r.w * r.h) / 4000), pos: new THREE.Vector3(r.x + r.w / 2, z0 + h + 0.8, -(r.y + r.h / 2)) });
-    zoneObjs[z.key] = { z, vol, col };
+    zoneObjs[z.key] = { z, vol: null, col };
   }
+  for (const { col, op, geos } of volAcc.values()) { const m = new THREE.Mesh(merge(geos), own(new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, depthWrite: false, toneMapped: false }))); m.renderOrder = 5; volumes.add(m); }
+  for (const { col, op, v } of lineAcc.values()) volumes.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(v), own(new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: op, depthWrite: false }))));
   // reserve strip: empty floor (no racks, no pallets) with a dashed outline and a label
   const rv = sc.reserve;
   if (rv && rv.w > 0.5 && rv.h > 0.5) {
@@ -74,14 +81,21 @@ export function buildZones(rep, secInfo, world, opt = {}) {
   // bays at the 4.5 m door pitch: a marked floor rectangle per bay with its number, IN green, OUT blue
   const bayObjs = [];
   const cnt = { IN: 0, OUT: 0 };
+  const bayMat = {}, bayOl = {}, bayGeo = { IN: [], OUT: [] }, bayLines = { IN: [], OUT: [] };
+  for (const fl of ['IN', 'OUT']) { const col = fl === 'IN' ? ROLES.in.hex : ROLES.out.hex;
+    bayMat[fl] = own(new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.34, depthWrite: false, toneMapped: false }));
+    bayOl[fl] = own(new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.95, depthWrite: false })); }
   for (const d of secInfo.doors) {
     const r = d.rect, col = d.flow === 'IN' ? ROLES.in.hex : ROLES.out.hex;
-    const mat = own(new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.34, depthWrite: false, toneMapped: false }));
-    const m = flat(r.x + 0.1, r.y + 0.1, r.w - 0.2, r.h - 0.2, 0.03, mat); floors.add(m);
-    const ol = outline(r.x + 0.1, r.y + 0.1, r.w - 0.2, r.h - 0.2, 0.04, col, floors, 0.95);
+    bayGeo[d.flow].push(new THREE.PlaneGeometry(r.w - 0.2, r.h - 0.2).rotateX(-Math.PI / 2).translate(r.x + 0.1 + (r.w - 0.2) / 2, 0.03, -(r.y + 0.1 + (r.h - 0.2) / 2)));
+    const pts = rectPts(r.x + 0.1, r.y + 0.1, r.w - 0.2, r.h - 0.2, 0.04); for (let i = 0; i + 1 < pts.length; i++) bayLines[d.flow].push(pts[i], pts[i + 1]);
     cnt[d.flow]++;
     labelDefs.push({ id: `bay:${d.flow}${cnt[d.flow]}`, kind: 'zone', text: `${d.flow} ${cnt[d.flow]}`, color: col, prio: 3.5, pos: new THREE.Vector3(r.x + r.w / 2, 0.9, -(r.y + r.h / 2)) });
-    bayObjs.push({ d, mat, ol, col });
+    bayObjs.push({ d, mat: bayMat[d.flow], ol: { material: bayOl[d.flow] }, col });
+  }
+  for (const fl of ['IN', 'OUT']) if (bayGeo[fl].length) {
+    const m = new THREE.Mesh(merge(bayGeo[fl]), bayMat[fl]); m.receiveShadow = true; floors.add(m);
+    floors.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(bayLines[fl]), bayOl[fl]));
   }
   // picking conveyor loop for dock case U (IN and OUT on the same side): around the staging zone, inset 1.1 m. *assumption*: the loop is drawn from the staging zone
   // rectangle; the model has no loop field yet (R10 `areas`, listed in the R9b report)
@@ -118,6 +132,11 @@ export function buildZones(rep, secInfo, world, opt = {}) {
     const r = z.rect, mezz = z.level === 'mezzanine', n = z.key === 'staging' ? 2 : 1;
     for (let k = 0; k < n; k++) { const p = opt.makePerson(); p.position.set(r.x + r.w * (0.35 + 0.3 * k), mezz ? MZ_Z : 0, -(r.y + r.h * 0.5)); p.rotation.y = 0.7 + k * 1.9; props.add(p); }
   }
+  // static props (forklift, operators): baked into one mesh per material
+  { props.updateMatrixWorld(true); const byMat = new Map();
+    props.traverse((o) => { if (!o.isMesh) return; const gm = o.geometry.clone().applyMatrix4(o.matrixWorld); const k = o.material; if (!byMat.has(k)) byMat.set(k, []); byMat.get(k).push(gm); });
+    props.clear();
+    for (const [mat, geos] of byMat) { const m = new THREE.Mesh(merge(geos), mat); m.castShadow = true; m.matrixAutoUpdate = true; props.add(m); } }
   const api = {
     group: g, zones: zoneObjs, bays: bayObjs, loop, mats, labelDefs,
     setVisible(on) { volumes.visible = on; floors.visible = on; },

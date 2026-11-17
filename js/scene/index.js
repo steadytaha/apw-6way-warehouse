@@ -94,7 +94,7 @@ function createScene(detail, stage, r) {
   const rig = createRig(camera, canvas, world, { reduced, onChange: invalidate });
   const speedInit = prefs.speed ?? (reduced ? 3 : TIME.speedupDefault);
   const st = { zones: prefs.zones ?? true, walls: prefs.walls ?? false, contingency: null, speed: speedInit, playing: prefs.playing ?? !reduced, view: 'orbit', shell: prefs.shell, envName: prefs.env, abc: prefs.abc };
-  const autoEnv = () => (effectiveTheme() === 'dark' ? 'dusk' : 'day');
+  const autoEnv = () => (effectiveTheme() === 'dark' ? 'studio' : 'day');
 
   const api = {
     get info() { return { positions: world.positions, stock: world.stock, buildMs, drawCalls: r.info.render.calls, triangles: r.info.render.triangles }; },
@@ -111,9 +111,9 @@ function createScene(detail, stage, r) {
       if (id === 'tiers') { api.setTierGauge(true); const s = defaultShots(rep, world, sim).find((x) => x.name === 'Tier limit'); if (s) rig.goToModel(s.to); }
       applyShell(); invalidate();
     },
-    setView(v) { st.view = v; prefs.view = v; st.following = null; panel.follow(null); panel.setView(v); applyShell(); rig.setView(v); invalidate(); },
+    setView(v) { st.view = v; prefs.view = v; st.following = null; setFocus(null); panel.follow(null); panel.setView(v); applyShell(); rig.setView(v); invalidate(); },
     setShell(m) { st.shell = m; prefs.shell = m; panel.setShell(m); applyShell(); invalidate(); },
-    setEnv(n) { st.envName = n; prefs.env = n; panel.setEnv(n); env.set(n); invalidate(); },
+    setEnv(n) { st.envName = n; prefs.env = n; panel.setEnv(n); env.set(n); invalidate(); scheduleThumbs(); },
     setSpeed(s) { st.speed = s; prefs.speed = s; panel.setSpeed(s); },
     play() { st.playing = true; prefs.playing = true; panel.setPlaying(true); invalidate(); },
     pause() { st.playing = false; prefs.playing = false; panel.setPlaying(false); invalidate(); },
@@ -124,13 +124,24 @@ function createScene(detail, stage, r) {
     setZonesVisible(on) { st.zones = !!on; prefs.zones = st.zones; zones.setVisible(st.zones); invalidate(); },
     setWalls(on) { st.walls = !!on; prefs.walls = st.walls; zones.setWalls(st.walls); invalidate(); },
     setContingency(kind) { const k = kind || null; st.contingency = k; prefs.contingency = k; const t = comp.setContingency(k); invalidate(); return t; },
-    playIOPath(mode, opts) { return ioPath.play(mode, opts); },
+    playIOPath(mode, opts) { const pr = ioPath.play(mode, opts); if (pr) { world.setDim(0.55); pr.then(() => { if (!focusSpec) world.setDim(1); invalidate(); }); } return pr; },
+    /** R26d V7: one shuttle for a "shuttle on a lift" shot: the busy shuttle nearest to the first lift. Returns {get, focus(), release()}; `get` is the follow point for a tour shot. */
+    pickShuttle() {
+      if (pickMemo) return pickMemo;
+      let s = null;     // the shuttle nearest to the first lift in plan (in the aisle in front of it, on its deck when it rides)
+      const choose = () => { if (s) return s; const l0 = sim.lifts[0]; if (!l0) return (s = sim.shuttles[0]);
+        const lp = l0.f.pos(l0.spec.u, l0.spec.v, 0).add(secOff(l0.sec)); let bd = Infinity;
+        for (const c of sim.shuttles) { const q = c.f.pos(c.u, c.v, c.z).add(secOff(c.sec)); q.y = 0; const d2 = q.distanceToSquared(lp) - (c.actor && c.actor.busy ? 2 : 0); if (d2 < bd) { bd = d2; s = c; } }
+        return s; };
+      return (pickMemo = { get: () => { const c = choose(); return c.f.pos(c.u, c.v, c.z + 0.3).add(secOff(c.sec)); }, focus() { setFocus({ kind: 'shuttle', s: choose() }); }, release() { setFocus(null); } });
+    },
+    setFocusKind(kind) { if (!kind) setFocus(null); },
     stopIOPath() { ioPath.stop(); },
     get ioPath() { return ioPath.info; },
     frameShape() { rig.frameShape(); invalidate(); },
     get warnings() { return comp.warnings; },
     setABC(on) { st.abc = !!on; prefs.abc = st.abc; world.setABC(st.abc); panel.setABC(st.abc); invalidate(); },
-    unfollow() { st.following = null; panel.follow(null); rig.follow = null; rig.mode = st.view; applyShell(); invalidate(); },
+    unfollow() { st.following = null; setFocus(null); panel.follow(null); rig.follow = null; rig.mode = st.view; applyShell(); invalidate(); },
     follow(kind, i) { followEntity(kind, i); },
     /** R13a: tier-limit gauge: height ruler beside the building (rack height used, building height, 7-tier marker, next tier ghost) + the tier rule card (needs report.tier_rule) */
     setTierGauge(on) { st.tiers = !!on && tierGauge.available; prefs.tiers = st.tiers; tierGauge.setVisible(st.tiers); panel.setTiers(st.tiers); },
@@ -175,13 +186,14 @@ function createScene(detail, stage, r) {
     perf(seconds = 3) { if (!framesRendered) throw new Error('scene.perf(): no frame has been rendered yet; mount the 3D scene and wait for its first frame (or call snapshot())'); return benchmark(seconds); },
   };
   const modelKpi = (key) => { for (const g of rep.groups || []) for (const k of g.kpis) if (k.key === key) return k.value; return null; };
-  const ioPath = createIOPath(rep, comp, { invalidate, followTarget: (g, d) => { st.following = null; return rig.followTarget(g, d); }, onStage: (e) => document.dispatchEvent(new CustomEvent('apw:iopath', { detail: e })) });
+  const ioPath = createIOPath(rep, comp, { invalidate, pathLabels: (defs) => { labels.clear('path'); if (defs) defs.forEach((d) => labels.add(d)); }, followTarget: (g, d) => { st.following = null; return rig.followTarget(g, d); }, onStage: (e) => document.dispatchEvent(new CustomEvent('apw:iopath', { detail: e })) });
   const panel = createPanel(stage, api, { reduced, view: st.view, shell: st.shell, env: st.envName || autoEnv(), speed: st.speed });
   panel.setPlaying(st.playing); panel.setSpeed(st.speed); panel.setABC(st.abc);
   if (prefs.tiers && tierGauge.available) { st.tiers = true; tierGauge.setVisible(true); panel.setTiers(true); }
   // R13a: rack info card (hover / tap one rack) and the tier-limit gauge (height ruler + card)
   const rackInfo = createRackInfo(rep, comp, stage, camera, canvas, { invalidate });
   const tierGauge = createTierGauge(rep, comp, stage, { invalidate });
+  labels.setOccluders(rackInfo.racks.map((rk) => { rk.pick.updateWorldMatrix(true, false); return new THREE.Box3().setFromObject(rk.pick).expandByScalar(-0.3); }));   // R26d V7: labels behind a rack are hidden
   const modelNums = { util: modelKpi('queues.rho_shuttle'), // FIX (R13c): the model value next to the observed time per move was `cycles.shuttle` (126.7 s: the shuttle cycle of one lane without boarding and lift ride, a different quantity from the observed time per move, 215 s);
   // the comparable model figure is the service time per move of the pooled fleet, fleet.T_V_s (rho = lambda x T_V / N)
   // FIX (R18e): no fallback to other quantities when fleet.T_V_s is missing (old cause: `cycles.shuttle` / `cycle.shuttle_s` came back in, the quantity R13c had removed); the HUD shows n/a
@@ -209,7 +221,7 @@ function createScene(detail, stage, r) {
     else r.clippingPlanes = [];
   }
   const tourHost = {
-    cut(shot, cb) { ioPath.stop(); setShotLabels(shot.labels);      // FIX (R13c): the dock-to-lane tracer of chapter 5 stayed on screen in later chapters (old cause: only the tracer's own end or an explicit stop removed it)
+    cut(shot, cb) { ioPath.stop(); if (!st.following) setFocus(null); setShotLabels(shot.labels);      // FIX (R13c): the dock-to-lane tracer of chapter 5 stayed on screen in later chapters (old cause: only the tracer's own end or an explicit stop removed it)
       if (rig.reduced) { panel.text(shot.text); cb(); return; } panel.fade(225, true); setTimeout(() => { cb(); panel.text(shot.text); panel.fade(225, false); invalidate(); }, 225); },
     setEnv(n) { env.set(n); panel.setEnv(n); applyShellFor(shotShell); },
     setShell(m) { shotShell = m; applyShellFor(m); },
@@ -248,6 +260,7 @@ function createScene(detail, stage, r) {
     if (!sub) return null;
     if (typeof sub === 'object' && sub.at) return new THREE.Vector3(sub.at[0], sub.at[2], -sub.at[1]);
     if (sub === 'building') return new THREE.Vector3(sc.building.L / 2, sc.building.H * 0.4, -sc.building.W / 2);
+    if (sub === 'shuttle') return api.pickShuttle().get();
     if (sub === 'lift') { const l = sim.lifts[0]; return l ? l.f.pos(l.spec.u, l.spec.v, topZ * 0.6).add(secOff(l.sec)) : null; }
     if (sub === 'rack') { const b = [...rackInfo.racks].sort((x, y) => y.pallets - x.pallets)[0]; return b ? b.centre.clone().add(secOff(b.sec)) : null; }
     if (sub === 'dock') { const d = world.docks.in || world.docks.out; return d ? new THREE.Vector3(d.x, 2, -d.y) : null; }
@@ -271,10 +284,22 @@ function createScene(detail, stage, r) {
     });
   }
   labels.setFilter((d) => {
+    if (d.kind === 'path') return !d.reveal || d.reveal();
     if (rig.tour) return d.kind === 'shot' || (shotSet && (shotSet.has(d.kind) || shotSet.has(d.id) || (d.kind === 'zone' && shotSet.has('zones'))));
+    if (d.kind === 'path') return !d.reveal || d.reveal();             // R26d V7: numbered markers of the 3D pallet path
     return d.kind === 'lift' || (d.kind === 'zone' && st.zones);
   });
 
+  // ---------------------------------------------------------------- R26d V7: focus mode (actors stand out on realistic racks)
+  // Team decision (2026-11-17): the racks keep the real blue steel and orange beams, so the focus is made by other means: the rack steel and the load dim to 40 %, the focused shuttle is drawn 1.25x with a yellow
+  // outline (a lift gets an outline box), and every shuttle leaves a fading trail. spec = {kind: 'shuttle', s} | {kind: 'lift', i} | null.
+  let focusSpec = null, pickMemo = null;
+  function setFocus(spec, dim = 0.4) {
+    focusSpec = spec || null;
+    fleets.forEach((fl) => { fl.setFocus(spec && spec.kind === 'shuttle' ? spec.s : null); fl.setScale(spec && spec.kind === 'shuttle' ? 1.25 : 1); });
+    liftApis.forEach((l, k) => { l.outline.visible = !!spec && spec.kind === 'lift' && spec.i === k; });
+    world.setDim(spec ? dim : 1); invalidate();
+  }
   // follow a shuttle or lift
   function followEntity(kind, i) {
     let get, label, dist;
@@ -282,6 +307,7 @@ function createScene(detail, stage, r) {
       label = `Following shuttle ${i + 1}, upper tiers hidden`; dist = 9; }   // FIX (R9a): one pooled fleet, a shuttle has no fixed tier (old text: "on tier N")
     else { const l = sim.lifts[i]; if (!l) return; get = () => l.f.pos(l.spec.u, l.spec.v, l.z + 1.2).add(comp.secs[l.sec].grp.position); label = `Following lift ${l.spec.id} (${l.group.toLowerCase()})`; dist = 18; }
     st.following = { kind, i }; panel.follow(label); panel.hideHint();
+    setFocus(kind === 'shuttle' ? { kind, s: sim.shuttles[i] } : { kind, i });
     applyShell();
     rig.followTarget(get, dist); invalidate();
   }
@@ -314,7 +340,7 @@ function createScene(detail, stage, r) {
   function onDocKey(e) { if (e.key === 'Escape' && full) api.toggleFull(); }
   document.addEventListener('apw:theme', onTheme);
   const themeMq = matchMedia('(prefers-color-scheme: dark)'); themeMq.addEventListener('change', onTheme);
-  function onTheme() { if (!st.envName) { const n = autoEnv(); env.set(n); panel.setEnv(n); invalidate(); } }
+  function onTheme() { if (!st.envName) { const n = autoEnv(); env.set(n); panel.setEnv(n); invalidate(); scheduleThumbs(); } }
 
   // ---------------------------------------------------------------- size, visibility
   function resize() {
@@ -351,13 +377,20 @@ function createScene(detail, stage, r) {
     }
     if (rig.tour) active = true;
     if (ioPath.update(dt)) active = true;
-    hudT += dt; if (hudT > 0.25) { hudT = 0; panel.hud(sim.stats(), modelNums); }
+    hudT += dt; if (hudT > 0.25) { hudT = 0; panel.hud(sim.stats(), modelNums); updateLOD(); }
     if (active) {
       render(); idleT = 0; labels.update(now);
       frameWin.push(dt); frameWinT += dt;
       while (frameWinT > 1 && frameWin.length > 1) frameWinT -= frameWin.shift();   // FIX (R18e): keep 1 s of frames (time, not count)
       adapt(dt);
     } else { idleT += dt; if (idleT > 0.5) stop(); }
+  }
+  // R26d V7: rack level of detail by distance (see world.setLOD); a 10 m margin keeps the level from flickering at a threshold; a large design (> 9,000 positions) never uses level 0
+  function updateLOD() {
+    const d = camera.position.distanceTo(rig.center) - 0.3 * Math.hypot(sc.building.L, sc.building.W), cur = world.lod;
+    let lv = d > (cur >= 2 ? 140 : 160) ? 2 : d > (cur >= 1 ? 55 : 70) ? 1 : 0;
+    if (world.positions > 9000) lv = Math.max(lv, d > 90 ? 2 : 1);
+    if (lv !== cur) { world.setLOD(lv); invalidate(); }
   }
   const pa = new THREE.Vector3(), pb = new THREE.Vector3();
   function followPools() {
@@ -404,7 +437,36 @@ function createScene(detail, stage, r) {
     });
   }
 
+  // R26d V7: preview pictures of the six camera presets: one small render per preset (192 x 108 on the live canvas, then the size is restored), made once after the scene has settled and again after a lighting change,
+  // in an idle moment and never while the model runs (the 3D view only mounts with a finished report). The poses are set from the building size, independent of the presets' own camera moves.
+  let thumbT = 0;
+  function makeThumbs() {
+    if (!framesRendered || degraded >= 4) return;
+    const Bq = sc.building, cx = Bq.L / 2, cy = Bq.W / 2, dg = Math.hypot(Bq.L, Bq.W), d = world.docks.in || world.docks.out, l0 = sim.lifts[0];
+    const lp = l0 ? l0.f.pos(l0.spec.u, l0.spec.v, 8).add(secOff(l0.sec)) : new THREE.Vector3(cx, 8, -cy);
+    const T = (x, y, z) => new THREE.Vector3(x, z, -y);
+    const poses = {
+      orbit: [T(cx - dg * 0.5, cy - dg * 0.85, Bq.H * 1.75), T(cx, cy, Bq.H * 0.25), 38],
+      plan: [T(cx, cy - 0.01, dg * 1.05), T(cx, cy, 0), 32],
+      section: [T(cx, cy - dg * 1.05, Bq.H * 0.6), T(cx, cy, Bq.H * 0.45), 32],
+      lift: [lp.clone().add(new THREE.Vector3(8, 1, 9)), lp.clone().setY(lp.y - 2), 42],
+      docks: d ? [T(d.x - d.nx * dg * 0.7 - d.ny * dg * 0.5, d.y - d.ny * dg * 0.7 + d.nx * dg * 0.5, Bq.H * 1.7), T(d.x + d.nx * dg * 0.35, d.y + d.ny * dg * 0.35, 3), 42] : null,
+      tiers: [T(cx - dg * 0.45, cy - dg * 0.8, Bq.H * 0.9), T(cx, cy, Bq.H * 0.45), 36],
+    };
+    const prevPR = r.getPixelRatio(), sz = r.getSize(new THREE.Vector2()), cam = new THREE.PerspectiveCamera(38, 16 / 9, 0.3, 1800), out = {};
+    const clip = r.clippingPlanes; r.clippingPlanes = [];
+    r.setPixelRatio(1); r.setSize(192, 108, false);
+    for (const [id, p] of Object.entries(poses)) { if (!p) continue; cam.position.copy(p[0]); cam.fov = p[2]; cam.updateProjectionMatrix(); cam.lookAt(p[1]); r.render(scene, cam); out[id] = canvas.toDataURL('image/jpeg', 0.72); }
+    r.setPixelRatio(prevPR); r.setSize(sz.x, sz.y, false); r.clippingPlanes = clip;
+    panel.setThumbs(out); invalidate();
+  }
+  function scheduleThumbs(ms = 2800) {
+    clearTimeout(thumbT);
+    thumbT = setTimeout(() => { const run = () => { try { makeThumbs(); } catch (e) { console.warn('[scene] thumbnails failed', e); } }; (window.requestIdleCallback || ((fn) => setTimeout(fn, 50)))(run, { timeout: 2000 }); }, ms);
+  }
+  api.thumbs = makeThumbs;
   // first frame
+  scheduleThumbs();
   resize();
   rig.setView(st.view, { instant: true });
   applyShell();
@@ -414,7 +476,7 @@ function createScene(detail, stage, r) {
   start();
 
   function dispose() {
-    stop(); ro.disconnect(); io.disconnect();
+    stop(); clearTimeout(thumbT); ro.disconnect(); io.disconnect();
     document.removeEventListener('keydown', onDocKey); document.removeEventListener('apw:theme', onTheme); document.removeEventListener('visibilitychange', invalidate); themeMq.removeEventListener('change', onTheme);
     document.documentElement.classList.remove('sc-lock');
     if (rig.tour) rig.stopTour();

@@ -243,7 +243,10 @@ export function chapterShots(api, rep) {
     after: () => { try { api.playIOPath && api.playIOPath('in', { seconds: 14 }); } catch (e) { console.warn('[story] playIOPath failed', e); } } })];
   // the fleet and the flow chapters look at the cut-away building from the other sides (the default Lift shot circles one lift at 7 m inside the rack, where only steel is in the picture; actors in focus are V7)
   const side = (deg, k = 1) => ({ from: { pos: az(deg, diag * 1.05 * k, B.H * 1.05 + diag * 0.1), target: [cx, cyy, B.H * 0.35], fov: 36 }, to: { pos: az(deg + 12, diag * 0.95 * k, B.H * 1.1 + diag * 0.1), target: [cx, cyy, B.H * 0.35], fov: 36 } });
-  out.fleet = [mk(cut, { dur: 9, env: 'day', labels: ['shuttle', 'lift'], subject: 'lift', ...side(40) })];
+  // R26d V7 (Visual_plan table 5, chapter 4 "one fleet"): a shuttle on a lift, follow shot, the rack dims and the shuttle is outlined and drawn 1.25x (old: a plain side view of the building)
+  const pk = api.pickShuttle ? api.pickShuttle() : null;
+  out.fleet = [mk(cut, { dur: 9, env: 'day', labels: ['shuttle', 'lift'], subject: pk ? 'shuttle' : 'lift', shell: 'open', ...side(40), ...(pk ? { follow: pk.get, followDist: 12 } : {}),
+    after: () => { if (pk) pk.focus(); } })];
   out.layout = [mk(over, { name: 'Lift stations', dur: 5, abc: true, labels: ['lift'], subject: 'lift',
       from: { pos: [cx, cyy - 0.5, diag * 1.05], target: [cx, cyy, 0], fov: 30 }, to: { pos: [cx, cyy - 0.5, diag * 1.0], target: [cx, cyy, 0], fov: 30 } }),
     mk(pick(rack, aisle), { dur: 4, abc: false, labels: ['rack'], subject: 'rack' })];
