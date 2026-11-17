@@ -8,7 +8,7 @@ let lib = null;
 // An import map cannot list a second source, so the map is written here, once, before the first module that imports 'three' is loaded (scene/index.js is loaded lazily and
 // is the first one). Needs a browser that accepts an import map added after start-up (Chrome 133+, Firefox 108+, Safari 17+); otherwise the import fails and the 2D plan is shown with the reason.
 const THREE_VERSION = '0.186.0';
-const THREE_SOURCES = [['jsDelivr', `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`], ['unpkg', `https://unpkg.com/three@${THREE_VERSION}/`]];
+const THREE_SOURCES = [['site', new URL('../../vendor/three/', import.meta.url).href]];      // FIX (R26c-2): self-hosted; old cause: jsDelivr then unpkg
 // R26b: Subresource Integrity for the pinned three.js files (sha384 of the files at 0.186.0; identical on jsDelivr and unpkg, checked 2026-11-17). Browsers that support `integrity` in import maps
 // (Chrome 127+, Safari 18+, Firefox 138+) refuse a changed file; older ones ignore the key. Change the version -> recompute these four hashes (openssl dgst -sha384 -binary | openssl base64 -A).
 const THREE_SRI = { 'build/three.module.js': 'sha384-m8JoFX52V6NGv2usipnlLJKnJfL7IE8dbniPDDCSGSQv3Hm4n6PjfV6syVwfuoRc', 'build/three.core.js': 'sha384-mdKeCwPEcbDvzaxwhm+MVuLoMou+E7jQqrs4tmu/n8HBYPGI1kZt0MkJxlMR4zFM',
@@ -29,7 +29,7 @@ async function ensureThreeMap() {
     threeSource = name;
     return name;
   }
-  throw new Error('three.js is not reachable on cdn.jsdelivr.net or unpkg.com');
+  throw new Error('three.js is not reachable on this site');
 }
 globalThis.APW = Object.assign(globalThis.APW || {}, { threeSource: () => threeSource });
 const load = () => (lib || (lib = ensureThreeMap().then(() => import('./index.js'))));
@@ -48,7 +48,7 @@ document.addEventListener('apw:report', async (e) => {
     console.warn('[scene] 3D view failed:', err);
     lib = null;
     // FIX (R21b, G11): the reason is told (old cause: a generic text for every failure)
-    note(`The 3D library could not be loaded (${(err && err.message) || 'unknown error'}; it needs the internet once, from jsDelivr or unpkg). The top view is shown instead.`);
+    note(`The 3D library could not be loaded (${(err && err.message) || 'unknown error'}; it is served from this site). The top view is shown instead.`);
   }
 });
 document.addEventListener('apw:leave', () => { if (lib) lib.then((m) => m.unmount()).catch(() => {}); });

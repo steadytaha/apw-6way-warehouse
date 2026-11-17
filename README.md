@@ -5,7 +5,7 @@ Live demo: https://steadytaha.github.io/apw-6way-warehouse/
 A course project (Digital Warehousing and Transportation, University of Padova). An analytic model of a compact pallet warehouse with 6-way shuttles and rail-deck shuttle lifts: give a building or a pallet target and it proposes racks, lifts and shuttles, and shows flows, energy and cost with a 3D view.
 
 - The model is our own analytic model, **not a vendor quote** and not a compliance certificate. Every assumed value is marked as an assumption in the page.
-- It runs entirely in your browser (Python via Pyodide, served from this site); nothing is sent anywhere, no cookies, no analytics. The first "Run" downloads the Python runtime and the model from this site (about 5 to 8 MB, once). The 3D library (three.js) is loaded from a public CDN with an integrity hash.
+- It runs entirely in your browser (Python via Pyodide, served from this site); nothing is sent anywhere, no cookies, no analytics. The first "Run" downloads the Python runtime and the model from this site (about 5 to 8 MB, once). The 3D library (three.js) is also served from this site, so no third-party server is contacted.
 - Open the live demo on a phone or a desktop browser (a recent Chrome, Edge, Firefox or Safari). A downloadable offline package may be offered under Releases.
 
 ## Sources the model refers to
