@@ -1,0 +1,203 @@
+/* APW demo: story, guided demo, compare and print report (B5). Tokens from design/tokens.css. Plain CSS only (single-file build). */
+
+/* ---------- results layout: scene and story side by side on a wide screen, stacked on a phone ---------- */
+.slots { gap: var(--sp-4); }
+@media (min-width: 64rem) {
+  .slots { grid-template-columns: minmax(0, 1.7fr) minmax(22rem, 1fr); align-items: start; }
+  .slot-scene .slot-stage.sc-stage { height: clamp(34rem, 82vh, 52rem); }
+}
+
+/* ---------- series colours (fixed order, light and dark come from the tokens) ---------- */
+.r-in { --c: var(--role-in); } .r-out { --c: var(--role-out); } .r-shuttle { --c: var(--role-shuttle); } .r-lift { --c: var(--role-lift); } .r-bind { --c: var(--role-bind); } .r-structure { --c: var(--role-structure); } .r-ink { --c: var(--text-2); }   /* R24 V5: resource roles */
+.c1 { --c: var(--viz-1); } .c2 { --c: var(--viz-2); } .c3 { --c: var(--viz-3); } .c4 { --c: var(--viz-4); } .c5 { --c: var(--viz-5); }
+
+/* ---------- charts ---------- */
+.ch { margin: 0; }
+.ch-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.ch text { font: var(--fw-regular) 13px/1 var(--font-sans); letter-spacing: 0.005em; }
+.ch-l { fill: var(--text-2); }
+.ch-v { fill: var(--text); font-weight: var(--fw-semibold); }
+.ch .ch-strong { fill: var(--text); font-weight: var(--fw-semibold); }
+.ch-track { fill: var(--viz-grid); }
+.ch-bar, .ch-sw, .ch-dot { fill: var(--c); }
+.ch-bar { transform-box: fill-box; transform-origin: left center; }
+.ch-vbar { transform-origin: center bottom; }
+.ch-axis { stroke: var(--viz-axis); stroke-width: 1; }
+.ch-grid { stroke: var(--viz-grid); stroke-width: 1; }
+.ch-ref { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 4 3; }
+.ch-hi { fill: var(--accent-soft); }
+path.ch-line { fill: none; stroke: var(--c); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1; }
+.ch-dot { stroke: var(--surface); stroke-width: 2; }
+.ch-bar:hover, .ch-dot:hover { opacity: 0.85; }
+
+/* ---------- story card ---------- */
+.st { display: grid; gap: var(--sp-4); padding: var(--sp-5); align-content: start; }
+.st-h h2 { font: var(--fw-semibold) var(--fs-title3)/var(--lh-title3) var(--font-display); letter-spacing: var(--ls-title3); }
+.st-h .cap { margin-top: var(--sp-1); }
+.st-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.st-actions .btn.lg { grid-column: 1 / -1; }
+.st-actions .btn:not(.lg) { padding: 0 var(--sp-2); min-width: 0; white-space: nowrap; }
+.st-nav { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.st-tab { width: var(--tap-min); height: var(--tap-min); border-radius: 50%; border: 1px solid var(--line-strong); background: transparent; color: var(--text-2); cursor: pointer; font: var(--fw-medium) var(--fs-footnote)/1 var(--font-sans);
+  transition: transform var(--dur-press) ease-out, background-color var(--dur-fast) var(--ease-inout), color var(--dur-fast), border-color var(--dur-fast); }
+.st-tab:hover { background: var(--surface-2); color: var(--text); }
+.st-tab:active { transform: scale(0.94); }
+.st-tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.st-panel { display: grid; gap: var(--sp-3); }
+.st-kick { font-size: var(--fs-caption); color: var(--text-3); letter-spacing: 0.02em; text-transform: uppercase; }
+.st-title { font: var(--fw-semibold) var(--fs-title3)/var(--lh-title3) var(--font-display); letter-spacing: var(--ls-title3); }
+.st-msg { font-size: var(--fs-callout); line-height: var(--lh-callout); letter-spacing: var(--ls-callout); color: var(--text); }
+.st-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: var(--sp-3); padding: var(--sp-3) 0; border-block: 1px solid var(--line); }
+.st-num { display: grid; gap: 0.15rem; align-content: start; min-width: 0; }
+.st-nl { font-size: var(--fs-caption); color: var(--text-2); line-height: 1.25; min-height: 2.5em; }
+.st-nn { display: flex; flex-wrap: wrap; align-items: baseline; font: var(--fw-semibold) 1.75rem/1.05 var(--font-display); letter-spacing: -0.02em; }
+.st-nn small { font-size: 0.8125rem; font-weight: var(--fw-medium); color: var(--text-2); letter-spacing: 0; margin-left: 0.3em; }
+.st-nd { font-size: var(--fs-caption); color: var(--text-3); line-height: 1.25; }
+.st-chart { padding-top: var(--sp-1); }
+.st-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-1); margin-inline: calc(-1 * var(--sp-3)); }
+.st-empty { display: flex; gap: var(--sp-4); align-items: flex-start; color: var(--text-2); }
+.st-empty p { margin: var(--sp-1) 0 0; font-size: var(--fs-footnote); }
+
+/* ---------- guided demo layer ---------- */
+.pr { position: absolute; inset: 0; z-index: 9; container-type: size; container-name: pr; color: #fff; pointer-events: none; outline: none; }
+.pr > * { pointer-events: auto; }
+.pr-panel { position: absolute; left: 0; top: 0; bottom: 5.25rem; width: clamp(22rem, 38cqw, 44rem); box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; gap: 1.6cqw; padding: 2.6cqw 2.6cqw 1.6cqw; overflow: hidden; pointer-events: none !important;
+  background: color-mix(in srgb, var(--surface) 80%, transparent); color: var(--text); border-right: 1px solid var(--line); }   /* R24 V5: solid 80 % panel (was a gradient scrim and white text over the picture) */
+.pr-cap { display: grid; gap: 1.1cqw; pointer-events: none !important; }
+.pr-kick { font-size: clamp(0.8125rem, 0.5cqw + 0.5rem, 0.95rem); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2); font-weight: var(--fw-medium); white-space: pre; }
+.pr-msg { font: var(--fw-semibold) clamp(1.15rem, 1.45cqw + 0.55rem, 1.95rem)/1.2 var(--font-display); letter-spacing: -0.015em; }
+.pr-nums { display: flex; flex-wrap: wrap; gap: 0.9cqw 2.2cqw; margin-top: 0.4cqw; }
+.pr-num { display: grid; gap: 0.15rem; min-width: 0; }
+.pr-nl { font-size: clamp(0.8125rem, 0.4cqw + 0.55rem, 0.95rem); color: var(--text-2); }
+.pr-nn { display: flex; align-items: baseline; font: var(--fw-semibold) clamp(1.4rem, 1.9cqw + 0.5rem, 2.6rem)/1 var(--font-display); letter-spacing: -0.025em; }
+.pr-nn small { font-size: max(0.34em, var(--fs-micro)); font-weight: var(--fw-medium); letter-spacing: 0; margin-left: 0.4em; color: var(--text-2); }
+.pr-nd { font-size: var(--fs-micro); color: var(--text-2); }
+.pr-chart { width: 100%; pointer-events: none !important; color: var(--text); }
+.pr-bar { position: absolute; left: var(--sp-3); right: var(--sp-3); bottom: var(--sp-3); display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-lg); color: var(--text); min-height: 3.5rem; }
+.pr-ctl { display: flex; align-items: center; gap: var(--sp-1); }
+.pr-rail { flex: 1 1 auto; display: flex; gap: 4px; min-width: 6rem; }
+.pr-seg { position: relative; flex: 1 1 0; min-width: 0; height: var(--tap-min); padding: 0; border: 0; background: transparent; cursor: pointer; }
+.pr-seg::before, .pr-seg i { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 5px; margin-top: -2.5px; border-radius: 3px; }
+.pr-seg::before { background: var(--surface-3); }
+.pr-seg i { background: var(--accent); transform-origin: left center; transform: scaleX(0); }
+.pr-seg[aria-current="step"]::before { height: 7px; margin-top: -3.5px; background: var(--line-strong); }
+.pr-seg:hover::before { background: var(--line-strong); }
+.pr-time { font-size: var(--fs-footnote); color: var(--text-2); white-space: nowrap; }
+.pr-recbtn { border: 0; cursor: pointer; min-height: 2.5rem; padding: 0 var(--sp-3); }
+.pr-recbtn[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.pr-arm { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; padding: var(--sp-3) var(--sp-5); border-radius: var(--r-pill); background: rgba(8, 10, 14, 0.62); font: var(--fw-medium) 1.1rem/1 var(--font-display); }
+.pr[data-armed="true"] .pr-arm { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; border-radius: var(--r-lg); padding: var(--sp-4) var(--sp-6); }
+.pr-arm-t { font-size: 1.75rem; letter-spacing: -0.01em; }
+.pr-arm-s { font-size: var(--fs-body); color: rgba(255, 255, 255, 0.85); }
+.pr:not(.rec) .pr-arm { display: none !important; }
+/* the scene's own controls give way to the layer */
+.slot-stage.pr-on .sc-dock, .slot-stage.pr-on .sc-hint, .slot-stage.pr-on .sc-full, .slot-stage.pr-on .sc-follow, .slot-stage.pr-on .sc-hud, .slot-stage.pr-on .sc-presets, .slot-stage.pr-on .sc-legend { display: none; }   /* R24 V5: the HUD showed through the solid caption panel */
+.slot-stage.pr-rec .sc-hud, .pr.rec .pr-bar { display: none; }
+/* recording mode: 16:9 frame, black around, no cursor */
+.slot-scene .slot-stage.sc-stage.is-full.pr-rec { inset: 0; margin: auto; width: min(100vw, calc(100vh * 16 / 9)); height: min(100vh, calc(100vw * 9 / 16)); box-shadow: 0 0 0 100vmax #000; cursor: none; }
+.slot-stage.pr-rec .pr * { cursor: none; }
+html.pr-rec-on body { background: #000; }
+.pr.rec .pr-panel { bottom: 0; }
+@container pr (max-width: 40rem) {
+  .pr-panel { top: auto; right: 0; bottom: 4.75rem; width: auto; max-height: 62%; padding: var(--sp-3) var(--sp-4); gap: 0.5rem; border-right: 0; border-top: 1px solid var(--line); }
+  .pr-chart { display: none; }
+  .pr-msg { font-size: 1.15rem; }
+  .pr-nums { gap: 0.4rem 1.25rem; }
+  .pr-nn { font-size: 1.5rem; }
+  .pr-bar { flex-wrap: wrap; row-gap: 0; padding-top: 0; }
+  .pr-rail { order: -1; flex-basis: 100%; }
+  .pr-time { margin-left: auto; }
+  .pr-recbtn { font-size: 0; gap: 0; padding: 0; width: 2.5rem; justify-content: center; }
+}
+@container pr (max-height: 28rem) {
+  .pr-panel { bottom: 4.75rem; }
+  .pr-nd { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .pr-seg i { transition: none; } }
+
+/* ---------- compare ---------- */
+.cmp { display: grid; gap: var(--sp-3); scroll-margin-top: 4.5rem; outline: none; }
+.cmp-head { display: grid; gap: var(--sp-1); }
+.cmp-box { display: grid; gap: var(--sp-2); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--sp-4) var(--sp-5); box-shadow: var(--shadow-1); }
+.cmp-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.cmp-table th, .cmp-table td { text-align: left; vertical-align: top; padding: var(--sp-3) var(--sp-3) var(--sp-3) 0; border-bottom: 1px solid var(--line); }
+.cmp-table thead th { vertical-align: top; font-weight: var(--fw-medium); font-size: var(--fs-footnote); }
+.cmp-table tbody th { font-weight: var(--fw-medium); font-size: var(--fs-footnote); color: var(--text-2); width: 22%; }
+.cmp-table tbody tr:last-child > * { border-bottom: 0; }
+.cmp-ent { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.cmp-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--c); flex: none; }
+.cmp-dim { display: block; margin-top: 0.2rem; font-weight: var(--fw-regular); }
+.cmp-v { display: block; font: var(--fw-medium) var(--fs-body)/1.2 var(--font-sans); margin-bottom: 0.4rem; }
+.cmp-v small { font-size: var(--fs-caption); color: var(--text-3); font-weight: var(--fw-regular); }
+td.best .cmp-v { font-weight: var(--fw-bold); }
+.cmp-why { display: block; margin-top: 0.25rem; color: var(--text-2); font-weight: var(--fw-regular); }
+.cmp-open { margin-top: var(--sp-2); padding: 0.3rem 0.7rem; min-height: 0; font-size: var(--fs-footnote); text-align: left; white-space: nowrap; }
+.cmp-badge { display: inline-flex; margin-top: 0.35rem; }
+.cmp-table td.tie { background: var(--viz-grid); }
+.cmp-tie { color: var(--text-3); font-weight: var(--fw-regular); }
+.cmp-table thead th { min-width: 11rem; }
+.cmp-box { overflow-x: auto; }
+.cmp-table td.best { background: var(--accent-soft, rgba(0, 113, 227, 0.08)); }   /* FIX (R13b): the winner of a row is highlighted, not only bold */
+.cmp-table td .cap { display: block; }
+.cmp-track { display: block; height: 8px; border-radius: 4px; background: var(--viz-grid); overflow: hidden; }
+.cmp-fill { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--c); transition: width var(--dur-slow) var(--ease-out); }
+@media (max-width: 48rem) {
+  .cmp-box { padding: var(--sp-4); }
+  .cmp-table, .cmp-table tbody, .cmp-table tr, .cmp-table th, .cmp-table td { display: block; width: auto; }
+  /* FIX (R13b): the column headers carry the label, the reason and the open button, so on a phone they stay visible as one card per design above the rows (old cause: the header row was hidden) */
+  .cmp-table thead th { min-width: 0; padding: var(--sp-3) 0; border-bottom: 1px solid var(--line); }
+  .cmp-table thead th:first-child { display: none; }
+  .cmp-table thead tr { padding: 0; border: 0; }
+  .cmp-table tbody tr { padding: var(--sp-3) 0; border-bottom: 1px solid var(--line); }
+  .cmp-table tbody tr:last-child { border-bottom: 0; }
+  .cmp-table tbody th { width: auto; padding: 0 0 var(--sp-2); border: 0; font-size: var(--fs-footnote); }
+  .cmp-table td { padding: 0 0 var(--sp-2); border: 0; display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 0 var(--sp-3); align-items: center; }
+  .cmp-table td::before { content: attr(data-label); grid-row: span 2; font-size: var(--fs-caption); color: var(--text-3); }
+  .cmp-table td > * { grid-column: 2; }
+  .cmp-v { margin-bottom: 0.25rem; }
+}
+
+/* ---------- printable report ---------- */
+#print-report { display: none; }
+@media print {
+  @page { margin: 14mm; }
+  html, body { background: #fff !important; }
+  body > *:not(#print-report) { display: none !important; }
+  #print-report { display: block; color: #111; background: #fff; font: 10pt/1.4 var(--font-sans); }
+  #print-report * { box-shadow: none !important; }
+  #print-report h1 { font-size: 22pt; margin: 2pt 0 6pt; letter-spacing: -0.02em; }
+  #print-report h2 { font-size: 14pt; margin: 16pt 0 6pt; padding-bottom: 3pt; border-bottom: 1px solid #bbb; break-after: avoid; }
+  #print-report h3 { font-size: 11pt; margin: 10pt 0 4pt; break-after: avoid; }
+  #print-report .pr-sum { font-size: 12pt; margin-bottom: 4pt; }
+  #print-report .cap { color: #555; font-size: 8.5pt; }
+  #print-report table { width: 100%; border-collapse: collapse; margin: 4pt 0 8pt; }
+  #print-report th, #print-report td { text-align: left; padding: 2.5pt 6pt 2.5pt 0; border-bottom: 0.5pt solid #ddd; font-size: 9pt; vertical-align: top; }
+  #print-report th { font-weight: 500; color: #333; width: 50%; }
+  #print-report .pr-t td.num { font-weight: 600; white-space: nowrap; }
+  #print-report .pr-cmp th { width: auto; font-weight: 600; }
+  #print-report .pr-cmp tbody th { width: 26%; font-weight: 500; }
+  #print-report .pr-ch, #print-report .pr-g { break-inside: avoid; }
+  #print-report .pr-ch .ch { max-width: 110mm; margin: 4pt 0 6pt; }
+  #print-report .pr-ch .ch-svg { max-height: 62mm; }
+  #print-report .pr-msg { font-size: 10.5pt; }
+  #print-report .sr-only { position: static; width: auto; height: auto; margin: 0; clip: auto; overflow: visible; white-space: normal; }
+  #print-report .ch table.sr-only { display: none; }
+  #print-report .cmp-track { display: none; }
+  #print-report .cmp-table thead { position: static; width: auto; height: auto; clip: auto; }
+  #print-report .cmp-table { display: table; }
+  #print-report .cmp-table thead { display: table-header-group; }
+  #print-report .cmp-table tbody { display: table-row-group; }
+  #print-report .cmp-table tbody tr, #print-report .cmp-table td, #print-report .cmp-table th { display: table-cell; }
+  #print-report .cmp-table tr { display: table-row; }
+  #print-report .cmp-table td::before { content: none; }
+  #print-report .cmp-dot { display: inline-block; }
+  #print-report .chip, #print-report .tag-assume { display: none; }
+  #print-report ul { margin: 4pt 0; padding-left: 14pt; }
+}
+
+/* the expanded stage keeps its full height on a wide screen (the side-by-side rule above sets a fixed height) */
+.slot-scene .slot-stage.sc-stage.is-full { height: auto; }
+/* R9b: print tables keep a readable first column and wrap long values instead of running off the page */
+@media print { .pr-t th[scope="row"] { width: 32%; } .pr-t td, .pr-t th { overflow-wrap: anywhere; } }
+/* FIX (R13c): the tier-limit card of the scene sat under the caption in the guided demo (old cause: the card is a scene overlay; the chapter shows the same limits as its own chart) */
+.pr-on .sc-tiers { display: none; }

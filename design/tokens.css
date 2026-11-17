@@ -1,0 +1,213 @@
+/* APW demo platform: design tokens (B1). Contract for B2-B6.
+   Themes: follows the OS (prefers-color-scheme) unless <html data-theme="light|dark"> is set.
+   Contrast ratios are listed in style_guide.md section 11; do not change colours without re-checking them. */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---------- type ---------- */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, Menlo, monospace;
+
+  /* size / leading / tracking sets (tracking tightens as size grows) */
+  --fs-micro: 0.8125rem;   --fs-caption: 0.8125rem;   --lh-caption: 1.35;   /* FIX (R24 V1, A-type): was 0.75rem (12 px); nothing in the app is smaller than 13 px */  --ls-caption: 0.01em;
+  --fs-footnote: 0.8125rem;--lh-footnote: 1.4;  --ls-footnote: 0.005em;
+  --fs-body: 1rem;         --lh-body: 1.5;      --ls-body: 0;
+  --fs-callout: 1.125rem;  --lh-callout: 1.45;  --ls-callout: -0.005em;
+  --fs-title3: 1.375rem;   --lh-title3: 1.3;    --ls-title3: -0.012em;
+  --fs-title2: 1.75rem;    --lh-title2: 1.2;    --ls-title2: -0.018em;
+  --fs-title1: clamp(2rem, 1.4rem + 2.4vw, 2.75rem); --lh-title1: 1.1; --ls-title1: -0.022em;
+  --fs-display: clamp(2.5rem, 1.5rem + 4.5vw, 4.5rem); --lh-display: 1.04; --ls-display: -0.03em;
+  --fs-kpi: clamp(2rem, 1.6rem + 1.6vw, 2.75rem); /* tabular numerals */
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+
+  /* ---------- spacing (4 px base, rem so text-size settings scale layout) ---------- */
+  --sp-1: 0.25rem; --sp-2: 0.5rem; --sp-3: 0.75rem; --sp-4: 1rem; --sp-5: 1.5rem;
+  --sp-6: 2rem;    --sp-7: 3rem;   --sp-8: 4.5rem;  --sp-9: 7rem;
+  --gutter: 1rem;                       /* phone gutter, 16 px */
+  --content-max: 72rem;
+  --tap-min: 2.75rem;                   /* 44 px hit area */
+
+  /* ---------- radii ---------- */
+  --r-xs: 0.375rem; --r-sm: 0.625rem; --r-md: 0.875rem; --r-lg: 1.25rem; --r-xl: 1.75rem; --r-pill: 999px;
+
+  /* ---------- motion ----------
+     Critically damped spring sampled as linear(); duration = the spring's settle time.
+     response 0.4 s -> 450 ms, response 0.28 s -> 310 ms. Bounce curve = damping 0.8, response 0.4 s, 600 ms. */
+  --ease-spring: linear(0, 0.022, 0.076, 0.148, 0.229, 0.312, 0.392, 0.469, 0.539, 0.603, 0.659, 0.709, 0.753, 0.791, 0.824, 0.852, 0.876, 0.896, 0.913, 0.928, 0.94, 0.95, 0.958, 0.966, 0.972, 0.977, 0.981, 0.984, 0.987, 0.989, 0.991, 1);
+  --ease-spring-bounce: linear(0, 0.039, 0.132, 0.252, 0.38, 0.503, 0.615, 0.711, 0.792, 0.856, 0.906, 0.944, 0.971, 0.99, 1.002, 1.01, 1.014, 1.015, 1.015, 1.014, 1.012, 1.01, 1.008, 1.006, 1.005, 1.004, 1.002, 1.002, 1.001, 1.001, 1, 1);
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);           /* entrances, decisive */
+  --ease-in: cubic-bezier(0.3, 0, 1, 1);            /* exits */
+  --ease-inout: cubic-bezier(0.4, 0, 0.2, 1);       /* on-screen moves, ambient */
+  --dur-press: 120ms;      /* press feedback, hover */
+  --dur-fast: 200ms;       /* toggles, icon swaps, fades */
+  --dur-base: 310ms;       /* cards, list items, snappy spring */
+  --dur-slow: 450ms;       /* screen change, default spring */
+  --dur-bounce: 600ms;     /* momentum spring only */
+  --dur-reveal: 800ms;     /* results reveal, hero */
+  --stagger: 60ms;         /* step between siblings; cap total at 400 ms */
+
+  /* ---------- z layers ---------- */
+  --z-base: 0; --z-sticky: 10; --z-overlay: 20; --z-modal: 30; --z-toast: 40;
+}
+
+/* ================= LIGHT (default) =================
+   Theme blocks use [data-theme] without :root so a nested container (e.g. the side-by-side board) can switch theme locally. */
+:root,
+[data-theme="light"] {
+  --bg: #f5f5f7;
+  --surface: #ffffff;                 /* cards */
+  --surface-2: #f0f0f3;               /* fields, wells, inactive tracks */
+  --surface-3: #e6e6ea;
+  --text: #1d1d1f;
+  --text-2: #55555a;
+  --text-3: #66666b;                  /* smallest allowed secondary text colour; FIX (R21b, A9-14): was #6e6e73 (4.46:1 on surface-2, 4.07:1 on surface-3), now 5.02:1 / 4.59:1 */
+  --line: rgba(0, 0, 0, 0.10);
+  --line-strong: rgba(0, 0, 0, 0.22);
+
+  --accent: #0a5fd0;
+  --accent-hover: #0850b0;
+  --accent-soft: rgba(10, 95, 208, 0.10);
+  --on-accent: #ffffff;
+  --focus-ring: #0a5fd0;
+
+  --success: #16794a;   --success-soft: rgba(22, 121, 74, 0.10);
+  --warning: #8a5300;   --warning-fill: #f3ad1e; --warning-soft: rgba(243, 173, 30, 0.18);
+  --danger:  #c0282a;   --danger-soft: rgba(192, 40, 42, 0.10);
+  --info: var(--accent);
+
+  /* data-viz series (>= 3:1 on --surface); always add a direct label or marker shape */
+  --viz-1: #2b6fd6;  /* blue   */
+  --viz-2: #d4580a;  /* orange */
+  --viz-3: #0b8f7d;  /* teal   */
+  --viz-4: #7a56cf;  /* violet */
+  --viz-5: #667788;  /* slate  */
+  --viz-grid: rgba(0, 0, 0, 0.08);
+  --viz-axis: #6e6e73;
+  /* ABC classes (same hues in 3D overlays) */
+  --abc-a: #c43d2f;  --abc-b: #b9791a;  --abc-c: #3f78a8;
+  /* resource roles (R24 V1, Visual_plan 1.2): one meaning each, contrast checked by tools/contrast_check.py (graphics >= 3:1, text >= 4.5:1) */
+  --role-in: #00805f;  --role-out: #0a5fd0;  --role-shuttle: #c76a00;  --role-lift: #7a4fc4;  --role-bind: #c8401a;  --role-structure: #667788;
+
+  /* glass material */
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-strong: rgba(255, 255, 255, 0.86);
+  --glass-edge: rgba(255, 255, 255, 0.65);        /* bright top edge */
+  --glass-blur: saturate(180%) blur(20px);
+  --scrim: rgba(20, 22, 26, 0.32);
+
+  /* elevation (cool, low-opacity, layered) */
+  --shadow-1: 0 1px 2px rgba(20, 24, 32, 0.06), 0 1px 1px rgba(20, 24, 32, 0.04);
+  --shadow-2: 0 2px 4px rgba(20, 24, 32, 0.05), 0 8px 24px rgba(20, 24, 32, 0.08);
+  --shadow-3: 0 4px 8px rgba(20, 24, 32, 0.06), 0 24px 56px rgba(20, 24, 32, 0.16);
+  --inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  /* stage behind the 3D canvas before the first frame / on fallback */
+  --stage-top: #cfd9e4; --stage-bottom: #e9ecef;
+}
+
+/* ================= DARK ================= */
+/* The values are repeated in the [data-theme="dark"] block below so the OS setting and the manual switch give the same result. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1013;
+    --surface: #1a1c20;
+    --surface-2: #23262b;
+    --surface-3: #2d3137;
+    --text: #f5f5f7;
+    --text-2: #a8a8ae;
+    --text-3: #9a9aa0;
+    --line: rgba(255, 255, 255, 0.10);
+    --line-strong: rgba(255, 255, 255, 0.24);
+
+    --accent: #5aa2ff;
+    --accent-hover: #7ab4ff;
+    --accent-soft: rgba(90, 162, 255, 0.16);
+    --on-accent: #0e1013;
+    --focus-ring: #7ab4ff;
+
+    --success: #4cc38a;  --success-soft: rgba(76, 195, 138, 0.16);
+    --warning: #f3ad1e;  --warning-fill: #f3ad1e; --warning-soft: rgba(243, 173, 30, 0.18);
+    --danger:  #ff6b66;  --danger-soft: rgba(255, 107, 102, 0.16);
+
+    --viz-1: #5aa2ff; --viz-2: #ff8a3d; --viz-3: #2cc7b0; --viz-4: #a58bff; --viz-5: #98a6b5;
+    --viz-grid: rgba(255, 255, 255, 0.09);
+    --viz-axis: #8e8e94;
+    --abc-a: #ff6b5e; --abc-b: #f0b43c; --abc-c: #6fa8d8;
+    --role-in: #3cc9a0;  --role-out: #6fa8ff;  --role-shuttle: #ffa83a;  --role-lift: #b69cff;  --role-bind: #ff7a52;  --role-structure: #9aa8b8;
+
+    --glass: rgba(34, 37, 42, 0.68);
+    --glass-strong: rgba(34, 37, 42, 0.86);
+    --glass-edge: rgba(255, 255, 255, 0.14);
+    --scrim: rgba(0, 0, 0, 0.55);
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.45);
+    --shadow-3: 0 4px 8px rgba(0, 0, 0, 0.4), 0 24px 56px rgba(0, 0, 0, 0.6);
+    --inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+    --stage-top: #1b2430; --stage-bottom: #0e1013;
+  }
+}
+[data-theme="dark"] {
+  --bg: #0e1013;
+  --surface: #1a1c20;
+  --surface-2: #23262b;
+  --surface-3: #2d3137;
+  --text: #f5f5f7;
+  --text-2: #a8a8ae;
+  --text-3: #9a9aa0; /* FIX (R21b, A9-14): was #8e8e94, 4.01:1 on surface-3, now 4.67:1 (4.66 -> 5.42 on surface-2) */
+  --line: rgba(255, 255, 255, 0.10);
+  --line-strong: rgba(255, 255, 255, 0.24);
+
+  --accent: #5aa2ff;
+  --accent-hover: #7ab4ff;
+  --accent-soft: rgba(90, 162, 255, 0.16);
+  --on-accent: #0e1013;
+  --focus-ring: #7ab4ff;
+
+  --success: #4cc38a;  --success-soft: rgba(76, 195, 138, 0.16);
+  --warning: #f3ad1e;  --warning-fill: #f3ad1e; --warning-soft: rgba(243, 173, 30, 0.18);
+  --danger:  #ff6b66;  --danger-soft: rgba(255, 107, 102, 0.16);
+
+  --viz-1: #5aa2ff; --viz-2: #ff8a3d; --viz-3: #2cc7b0; --viz-4: #a58bff; --viz-5: #98a6b5;
+  --viz-grid: rgba(255, 255, 255, 0.09);
+  --viz-axis: #8e8e94;
+  --abc-a: #ff6b5e; --abc-b: #f0b43c; --abc-c: #6fa8d8;
+  --role-in: #3cc9a0;  --role-out: #6fa8ff;  --role-shuttle: #ffa83a;  --role-lift: #b69cff;  --role-bind: #ff7a52;  --role-structure: #9aa8b8;
+
+  --glass: rgba(34, 37, 42, 0.68);
+  --glass-strong: rgba(34, 37, 42, 0.86);
+  --glass-edge: rgba(255, 255, 255, 0.14);
+  --scrim: rgba(0, 0, 0, 0.55);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 4px 8px rgba(0, 0, 0, 0.4), 0 24px 56px rgba(0, 0, 0, 0.6);
+  --inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+  --stage-top: #1b2430; --stage-bottom: #0e1013;
+}
+
+/* ================= accessibility modes ================= */
+@media (prefers-reduced-transparency: reduce) {
+  :root, [data-theme] { --glass: var(--surface); --glass-strong: var(--surface); --glass-blur: none; }
+}
+@media (prefers-contrast: more) {
+  :root, [data-theme] { --line: var(--line-strong); --text-2: var(--text); --text-3: var(--text-2); }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root, [data-theme] {
+    --ease-spring: ease-out; --ease-spring-bounce: ease-out;
+    --dur-press: 80ms; --dur-fast: 120ms; --dur-base: 160ms; --dur-slow: 200ms; --dur-bounce: 200ms; --dur-reveal: 240ms;
+    --stagger: 0ms;
+  }
+}
+
+/* ================= tiny base (components live in B2) ================= */
+html { font-family: var(--font-sans); font-size: 100%; line-height: var(--lh-body); color: var(--text); background: var(--bg);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; font-optical-sizing: auto; }
+body { margin: 0; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: var(--r-xs); }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }

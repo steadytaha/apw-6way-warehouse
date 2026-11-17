@@ -1,0 +1,14 @@
+# keep the site repo to the built files only
+.env
+*.env
+secrets.json
+*.key
+*.pem
+node_modules/
+__pycache__/
+*.pyc
+*.log
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
